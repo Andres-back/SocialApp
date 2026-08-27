@@ -1,0 +1,662 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+  LOCKED
+}
+
+enum AuditOutcome {
+  SUCCESS
+  DENIED
+  ERROR
+}
+
+enum SyncReceiptStatus {
+  ACCEPTED
+  REJECTED
+  CONFLICT
+}
+
+enum AthleteStatus {
+  ACTIVE
+  RETIRED
+  SUSPENDED
+  OTHER
+}
+
+enum Zone {
+  URBAN
+  RURAL
+}
+
+enum Sex {
+  FEMALE
+  MALE
+  INTERSEX
+  OTHER
+  PREFER_NOT_TO_SAY
+}
+
+enum DocumentType {
+  CIVIL_REGISTRY
+  IDENTITY_CARD
+  PASSPORT
+  PERMIT
+  NONE
+  OTHER
+}
+
+enum SocialRecordStatus {
+  DRAFT
+  COMPLETED
+}
+
+enum RelationshipQuality {
+  CLOSE
+  ADEQUATE
+  DISTANT
+  CONFLICTIVE
+  UNKNOWN
+}
+
+enum FamilyRelationshipRating {
+  VERY_GOOD
+  GOOD
+  REGULAR
+  DIFFICULT
+}
+
+enum PrimaryCaregiver {
+  MOTHER
+  FATHER
+  BOTH
+  GRANDPARENT
+  OTHER_RELATIVE
+  OTHER
+}
+
+enum AssessmentStatus {
+  DRAFT
+  COMPLETED
+}
+
+enum AlertLevel {
+  GREEN
+  YELLOW
+  RED
+}
+
+enum AlertStatus {
+  PENDING
+  CONFIRMED
+  DISMISSED
+}
+
+enum FollowUpStatus {
+  OPEN
+  IN_PROGRESS
+  CLOSED
+  REFERRED
+}
+
+enum FollowUpPriority {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum CampaignStatus {
+  PLANNED
+  ACTIVE
+  COMPLETED
+}
+
+enum ScreeningParticipantStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+}
+
+enum ObservationVisibility {
+  SOCIAL_WORK_ONLY
+  AUTHORIZED_TEAM
+  INSTITUTIONAL_SUMMARY
+}
+
+model User {
+  id            String                @id @default(uuid()) @db.Uuid
+  email         String                @unique @db.VarChar(254)
+  displayName   String                @db.VarChar(160)
+  passwordHash  String
+  status        UserStatus            @default(ACTIVE)
+  lastLoginAt   DateTime?
+  createdAt     DateTime              @default(now())
+  updatedAt     DateTime              @updatedAt
+  createdBy     String?               @db.Uuid
+  updatedBy     String?               @db.Uuid
+  deletedAt     DateTime?
+  version       Int                   @default(1)
+  roles         UserRole[]
+  refreshTokens RefreshToken[]
+  auditLogs     AuditLog[]            @relation("AuditActor")
+  syncReceipts  SyncMutationReceipt[]
+
+  @@index([status, deletedAt])
+}
+
+model Role {
+  id          String           @id @default(uuid()) @db.Uuid
+  code        String           @unique @db.VarChar(60)
+  name        String           @db.VarChar(100)
+  description String?
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+  createdBy   String?          @db.Uuid
+  updatedBy   String?          @db.Uuid
+  deletedAt   DateTime?
+  version     Int              @default(1)
+  users       UserRole[]
+  permissions RolePermission[]
+}
+
+model Permission {
+  id          String           @id @default(uuid()) @db.Uuid
+  code        String           @unique @db.VarChar(100)
+  name        String           @db.VarChar(120)
+  description String?
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+  createdBy   String?          @db.Uuid
+  updatedBy   String?          @db.Uuid
+  deletedAt   DateTime?
+  version     Int              @default(1)
+  roles       RolePermission[]
+}
+
+model UserRole {
+  userId     String   @db.Uuid
+  roleId     String   @db.Uuid
+  assignedAt DateTime @default(now())
+  assignedBy String?  @db.Uuid
+  user       User     @relation(fields: [userId], references: [id], onDelete: Restrict)
+  role       Role     @relation(fields: [roleId], references: [id], onDelete: Restrict)
+
+  @@id([userId, roleId])
+}
+
+model RolePermission {
+  roleId       String     @db.Uuid
+  permissionId String     @db.Uuid
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+}
+
+model RefreshToken {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @db.Uuid
+  tokenHash String
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
+  userAgent String?
+  ipAddress String?   @db.VarChar(64)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, expiresAt])
+}
+
+model AuditLog {
+  id           String       @id @default(uuid()) @db.Uuid
+  actorUserId  String?      @db.Uuid
+  action       String       @db.VarChar(100)
+  resourceType String?      @db.VarChar(100)
+  resourceId   String?      @db.Uuid
+  outcome      AuditOutcome @default(SUCCESS)
+  ipAddress    String?      @db.VarChar(64)
+  userAgent    String?
+  metadata     Json?
+  createdAt    DateTime     @default(now())
+  actor        User?        @relation("AuditActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  @@index([actorUserId, createdAt])
+  @@index([resourceType, resourceId])
+}
+
+model SyncMutationReceipt {
+  id            String            @id @default(uuid()) @db.Uuid
+  mutationId    String            @unique @db.Uuid
+  userId        String            @db.Uuid
+  entityType    String            @db.VarChar(100)
+  entityId      String            @db.Uuid
+  operation     String            @db.VarChar(20)
+  status        SyncReceiptStatus
+  serverVersion Int?
+  message       String?
+  receivedAt    DateTime          @default(now())
+  user          User              @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@index([userId, receivedAt])
+}
+
+model SportsProgram {
+  id        String              @id @default(uuid()) @db.Uuid
+  name      String              @unique @db.VarChar(120)
+  active    Boolean             @default(true)
+  createdAt DateTime            @default(now())
+  updatedAt DateTime            @updatedAt
+  createdBy String?             @db.Uuid
+  updatedBy String?             @db.Uuid
+  deletedAt DateTime?
+  version   Int                 @default(1)
+  athletes  Athlete[]
+  campaigns ScreeningCampaign[]
+}
+
+model Sport {
+  id        String              @id @default(uuid()) @db.Uuid
+  name      String              @unique @db.VarChar(120)
+  active    Boolean             @default(true)
+  createdAt DateTime            @default(now())
+  updatedAt DateTime            @updatedAt
+  createdBy String?             @db.Uuid
+  updatedBy String?             @db.Uuid
+  deletedAt DateTime?
+  version   Int                 @default(1)
+  athletes  Athlete[]
+  campaigns ScreeningCampaign[]
+}
+
+model Category {
+  id        String    @id @default(uuid()) @db.Uuid
+  name      String    @unique @db.VarChar(120)
+  active    Boolean   @default(true)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  createdBy String?   @db.Uuid
+  updatedBy String?   @db.Uuid
+  deletedAt DateTime?
+  version   Int       @default(1)
+  athletes  Athlete[]
+}
+
+model Coach {
+  id        String    @id @default(uuid()) @db.Uuid
+  name      String    @db.VarChar(160)
+  active    Boolean   @default(true)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  createdBy String?   @db.Uuid
+  updatedBy String?   @db.Uuid
+  deletedAt DateTime?
+  version   Int       @default(1)
+  athletes  Athlete[]
+}
+
+model Athlete {
+  id                       String                    @id @default(uuid()) @db.Uuid
+  internalCode             String                    @unique @db.VarChar(40)
+  documentType             DocumentType
+  documentNumber           String?                   @db.VarChar(40)
+  firstNames               String                    @db.VarChar(120)
+  lastNames                String                    @db.VarChar(120)
+  birthDate                DateTime                  @db.Date
+  sex                      Sex
+  municipality             String                    @db.VarChar(120)
+  zone                     Zone
+  sportsProgramId          String                    @db.Uuid
+  sportId                  String                    @db.Uuid
+  categoryId               String                    @db.Uuid
+  coachId                  String?                   @db.Uuid
+  joinedAt                 DateTime                  @db.Date
+  status                   AthleteStatus             @default(ACTIVE)
+  schoolName               String?                   @db.VarChar(180)
+  schoolGrade              String?                   @db.VarChar(40)
+  schoolShift              String?                   @db.VarChar(40)
+  currentlyEnrolled        Boolean                   @default(true)
+  createdAt                DateTime                  @default(now())
+  updatedAt                DateTime                  @updatedAt
+  createdBy                String?                   @db.Uuid
+  updatedBy                String?                   @db.Uuid
+  deletedAt                DateTime?
+  version                  Int                       @default(1)
+  sportsProgram            SportsProgram             @relation(fields: [sportsProgramId], references: [id], onDelete: Restrict)
+  sport                    Sport                     @relation(fields: [sportId], references: [id], onDelete: Restrict)
+  category                 Category                  @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  coach                    Coach?                    @relation(fields: [coachId], references: [id], onDelete: SetNull)
+  guardian                 Guardian?
+  socialRecords            SocialRecord[]
+  socioeconomicAssessments SocioeconomicAssessment[]
+  alerts                   Alert[]
+  followUpCases            FollowUpCase[]
+  observations             ProfessionalObservation[]
+  genograms                Genogram[]
+  ecomaps                  Ecomap[]
+  campaignParticipants     CampaignParticipant[]
+
+  @@unique([documentType, documentNumber])
+  @@index([firstNames, lastNames])
+  @@index([sportsProgramId, sportId, status])
+  @@index([deletedAt])
+}
+
+model Guardian {
+  id           String    @id @default(uuid()) @db.Uuid
+  athleteId    String    @unique @db.Uuid
+  name         String    @db.VarChar(160)
+  relationship String    @db.VarChar(80)
+  phone        String    @db.VarChar(40)
+  email        String?   @db.VarChar(254)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  createdBy    String?   @db.Uuid
+  updatedBy    String?   @db.Uuid
+  deletedAt    DateTime?
+  version      Int       @default(1)
+  athlete      Athlete   @relation(fields: [athleteId], references: [id], onDelete: Cascade)
+}
+
+model SocialRecord {
+  id                      String                   @id @default(uuid()) @db.Uuid
+  athleteId               String                   @db.Uuid
+  instrumentVersion       Int                      @default(1)
+  status                  SocialRecordStatus       @default(DRAFT)
+  livingWith              String[]
+  primaryCaregiver        PrimaryCaregiver
+  otherCaregiver          String?                  @db.VarChar(120)
+  familyRelationships     FamilyRelationshipRating
+  supportNetworks         String[]
+  otherSupportNetwork     String?                  @db.VarChar(160)
+  professionalObservation String?
+  completedAt             DateTime?
+  createdAt               DateTime                 @default(now())
+  updatedAt               DateTime                 @updatedAt
+  createdBy               String?                  @db.Uuid
+  updatedBy               String?                  @db.Uuid
+  deletedAt               DateTime?
+  version                 Int                      @default(1)
+  athlete                 Athlete                  @relation(fields: [athleteId], references: [id], onDelete: Restrict)
+  householdMembers        HouseholdMember[]
+
+  @@index([athleteId, updatedAt])
+  @@index([status, deletedAt])
+}
+
+model HouseholdMember {
+  id                  String              @id @default(uuid()) @db.Uuid
+  socialRecordId      String              @db.Uuid
+  name                String              @db.VarChar(160)
+  relationship        String              @db.VarChar(80)
+  approximateAge      Int?
+  livesWithAthlete    Boolean             @default(true)
+  occupation          String?             @db.VarChar(120)
+  relationshipQuality RelationshipQuality @default(UNKNOWN)
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
+  createdBy           String?             @db.Uuid
+  updatedBy           String?             @db.Uuid
+  deletedAt           DateTime?
+  version             Int                 @default(1)
+  socialRecord        SocialRecord        @relation(fields: [socialRecordId], references: [id], onDelete: Cascade)
+
+  @@index([socialRecordId, deletedAt])
+}
+
+model SocioeconomicAssessment {
+  id                     String           @id @default(uuid()) @db.Uuid
+  athleteId              String           @db.Uuid
+  instrumentVersion      Int              @default(1)
+  status                 AssessmentStatus @default(DRAFT)
+  housingType            String           @db.VarChar(40)
+  housingTenure          String           @db.VarChar(40)
+  bedrooms               Int
+  householdSize          Int
+  zone                   Zone
+  utilities              String[]
+  exclusiveKitchen       Boolean
+  transportMode          String           @db.VarChar(60)
+  travelTime             String           @db.VarChar(40)
+  transportDifficulty    String           @db.VarChar(40)
+  foodReduction          String           @db.VarChar(40)
+  foodBeforeTraining     String           @db.VarChar(40)
+  incomeRange            String           @db.VarChar(60)
+  dependents             Int
+  informedObservation    String?
+  professionalAssessment String?
+  completedAt            DateTime?
+  createdAt              DateTime         @default(now())
+  updatedAt              DateTime         @updatedAt
+  createdBy              String?          @db.Uuid
+  updatedBy              String?          @db.Uuid
+  deletedAt              DateTime?
+  version                Int              @default(1)
+  athlete                Athlete          @relation(fields: [athleteId], references: [id], onDelete: Restrict)
+
+  @@index([athleteId, updatedAt])
+  @@index([status, deletedAt])
+}
+
+model Alert {
+  id                     String      @id @default(uuid()) @db.Uuid
+  athleteId              String      @db.Uuid
+  sourceType             String      @db.VarChar(80)
+  sourceId               String?     @db.Uuid
+  level                  AlertLevel
+  status                 AlertStatus @default(PENDING)
+  informedData           String?
+  automaticIndicator     String
+  professionalAssessment String?
+  createdAt              DateTime    @default(now())
+  updatedAt              DateTime    @updatedAt
+  createdBy              String?     @db.Uuid
+  updatedBy              String?     @db.Uuid
+  deletedAt              DateTime?
+  version                Int         @default(1)
+  athlete                Athlete     @relation(fields: [athleteId], references: [id], onDelete: Restrict)
+
+  @@index([athleteId, status, level])
+  @@index([deletedAt])
+}
+
+model FollowUpCase {
+  id            String           @id @default(uuid()) @db.Uuid
+  athleteId     String           @db.Uuid
+  motive        String
+  priority      FollowUpPriority @default(MEDIUM)
+  status        FollowUpStatus   @default(OPEN)
+  responsible   String           @db.VarChar(160)
+  nextAction    String?
+  estimatedDate DateTime?        @db.Date
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+  createdBy     String?          @db.Uuid
+  updatedBy     String?          @db.Uuid
+  deletedAt     DateTime?
+  version       Int              @default(1)
+  athlete       Athlete          @relation(fields: [athleteId], references: [id], onDelete: Restrict)
+  entries       FollowUpEntry[]
+
+  @@index([athleteId, status, priority])
+  @@index([estimatedDate])
+}
+
+model FollowUpEntry {
+  id             String       @id @default(uuid()) @db.Uuid
+  followUpCaseId String       @db.Uuid
+  date           DateTime     @db.Date
+  situation      String
+  actions        String
+  agreements     String
+  responsible    String       @db.VarChar(160)
+  nextAction     String?
+  estimatedDate  DateTime?    @db.Date
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  createdBy      String?      @db.Uuid
+  updatedBy      String?      @db.Uuid
+  deletedAt      DateTime?
+  version        Int          @default(1)
+  followUpCase   FollowUpCase @relation(fields: [followUpCaseId], references: [id], onDelete: Cascade)
+
+  @@index([followUpCaseId, date])
+}
+
+model ProfessionalObservation {
+  id          String                @id @default(uuid()) @db.Uuid
+  athleteId   String                @db.Uuid
+  date        DateTime              @db.Date
+  type        String                @db.VarChar(80)
+  observation String
+  visibility  ObservationVisibility @default(SOCIAL_WORK_ONLY)
+  createdAt   DateTime              @default(now())
+  updatedAt   DateTime              @updatedAt
+  createdBy   String?               @db.Uuid
+  updatedBy   String?               @db.Uuid
+  deletedAt   DateTime?
+  version     Int                   @default(1)
+  athlete     Athlete               @relation(fields: [athleteId], references: [id], onDelete: Restrict)
+
+  @@index([athleteId, date])
+}
+
+model Genogram {
+  id        String    @id @default(uuid()) @db.Uuid
+  athleteId String    @db.Uuid
+  nodes     Json
+  edges     Json
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  createdBy String?   @db.Uuid
+  updatedBy String?   @db.Uuid
+  deletedAt DateTime?
+  version   Int       @default(1)
+  athlete   Athlete   @relation(fields: [athleteId], references: [id], onDelete: Restrict)
+
+  @@index([athleteId, updatedAt])
+}
+
+model Ecomap {
+  id        String    @id @default(uuid()) @db.Uuid
+  athleteId String    @db.Uuid
+  nodes     Json
+  edges     Json
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  createdBy String?   @db.Uuid
+  updatedBy String?   @db.Uuid
+  deletedAt DateTime?
+  version   Int       @default(1)
+  athlete   Athlete   @relation(fields: [athleteId], references: [id], onDelete: Restrict)
+
+  @@index([athleteId, updatedAt])
+}
+
+model ScreeningInstrument {
+  id        String              @id @default(uuid()) @db.Uuid
+  name      String              @db.VarChar(160)
+  version   Int                 @default(1)
+  ageGroup  String?             @db.VarChar(80)
+  active    Boolean             @default(true)
+  createdAt DateTime            @default(now())
+  updatedAt DateTime            @updatedAt
+  createdBy String?             @db.Uuid
+  updatedBy String?             @db.Uuid
+  deletedAt DateTime?
+  questions ScreeningQuestion[]
+  campaigns ScreeningCampaign[]
+
+  @@unique([name, version])
+}
+
+model ScreeningQuestion {
+  id           String              @id @default(uuid()) @db.Uuid
+  instrumentId String              @db.Uuid
+  dimension    String              @db.VarChar(100)
+  prompt       String
+  type         String              @db.VarChar(40)
+  options      Json
+  required     Boolean             @default(true)
+  position     Int
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
+  createdBy    String?             @db.Uuid
+  updatedBy    String?             @db.Uuid
+  deletedAt    DateTime?
+  version      Int                 @default(1)
+  instrument   ScreeningInstrument @relation(fields: [instrumentId], references: [id], onDelete: Cascade)
+
+  @@index([instrumentId, position])
+}
+
+model ScreeningCampaign {
+  id               String                @id @default(uuid()) @db.Uuid
+  name             String                @db.VarChar(160)
+  date             DateTime              @db.Date
+  place            String                @db.VarChar(180)
+  sportsProgramId  String?               @db.Uuid
+  sportId          String?               @db.Uuid
+  instrumentId     String                @db.Uuid
+  professionalName String                @db.VarChar(160)
+  status           CampaignStatus        @default(PLANNED)
+  createdAt        DateTime              @default(now())
+  updatedAt        DateTime              @updatedAt
+  createdBy        String?               @db.Uuid
+  updatedBy        String?               @db.Uuid
+  deletedAt        DateTime?
+  version          Int                   @default(1)
+  sportsProgram    SportsProgram?        @relation(fields: [sportsProgramId], references: [id], onDelete: SetNull)
+  sport            Sport?                @relation(fields: [sportId], references: [id], onDelete: SetNull)
+  instrument       ScreeningInstrument   @relation(fields: [instrumentId], references: [id], onDelete: Restrict)
+  participants     CampaignParticipant[]
+
+  @@index([date, status])
+}
+
+model CampaignParticipant {
+  id          String                     @id @default(uuid()) @db.Uuid
+  campaignId  String                     @db.Uuid
+  athleteId   String                     @db.Uuid
+  status      ScreeningParticipantStatus @default(PENDING)
+  responses   Json                       @default("{}")
+  completedAt DateTime?
+  createdAt   DateTime                   @default(now())
+  updatedAt   DateTime                   @updatedAt
+  createdBy   String?                    @db.Uuid
+  updatedBy   String?                    @db.Uuid
+  deletedAt   DateTime?
+  version     Int                        @default(1)
+  campaign    ScreeningCampaign          @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  athlete     Athlete                    @relation(fields: [athleteId], references: [id], onDelete: Restrict)
+
+  @@unique([campaignId, athleteId])
+  @@index([athleteId, status])
+}
+
+model ConfigurableRule {
+  id            String     @id @default(uuid()) @db.Uuid
+  name          String     @db.VarChar(160)
+  source        String     @db.VarChar(80)
+  field         String     @db.VarChar(100)
+  operator      String     @db.VarChar(40)
+  expectedValue String
+  indicator     String
+  level         AlertLevel
+  active        Boolean    @default(true)
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+  createdBy     String?    @db.Uuid
+  updatedBy     String?    @db.Uuid
+  deletedAt     DateTime?
+  version       Int        @default(1)
+
+  @@index([source, active])
+}

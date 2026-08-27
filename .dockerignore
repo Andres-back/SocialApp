@@ -1,0 +1,11 @@
+.git
+.github
+.playwright-cli
+node_modules
+**/node_modules
+**/dist
+**/dev-dist
+**/.env
+coverage
+*.log
+**/*.tsbuildinfo

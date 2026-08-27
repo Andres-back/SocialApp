@@ -1,0 +1,29 @@
+{
+  "name": "socialapp",
+  "version": "0.1.0",
+  "private": true,
+  "description": "PWA offline-first para apoyar el trabajo social en programas deportivos",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "concurrently -n web,api -c cyan,green \"npm run dev -w @socialapp/web\" \"npm run start:dev -w @socialapp/api\"",
+    "build": "npm run build -w @socialapp/shared && npm run build -w @socialapp/api && npm run build -w @socialapp/web",
+    "test": "npm run test -w @socialapp/shared && npm run test -w @socialapp/api && npm run test -w @socialapp/web",
+    "typecheck": "npm run typecheck -ws --if-present",
+    "lint": "npm run lint -ws --if-present",
+    "format": "prettier --write .",
+    "db:generate": "npm run prisma:generate -w @socialapp/api",
+    "db:migrate": "npm run prisma:migrate -w @socialapp/api",
+    "db:seed": "npm run prisma:seed -w @socialapp/api"
+  },
+  "engines": {
+    "node": ">=20.19.0",
+    "npm": ">=10.0.0"
+  },
+  "devDependencies": {
+    "concurrently": "9.1.2",
+    "prettier": "3.5.3"
+  }
+}

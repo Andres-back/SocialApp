@@ -1,0 +1,13 @@
+node_modules/
+dist/
+dev-dist/
+.playwright-cli/
+coverage/
+.env
+.env.local
+*.log
+*.tsbuildinfo
+.DS_Store
+.idea/
+.vscode/
+apps/api/prisma/dev.db

@@ -1,0 +1,43 @@
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import type { ScreeningCampaignInput, ScreeningInstrumentData, SocioeconomicAssessmentInput } from '@socialapp/shared';
+import { db } from '../../lib/db';
+import { saveAssessmentOffline, saveCampaignOffline, saveFollowUpOffline } from './work-repository';
+
+describe('offline social work repository', () => {
+  beforeEach(async () => {
+    await db.delete();
+    await db.open();
+    Object.defineProperty(navigator, 'onLine', { configurable: true, value: false });
+  });
+  afterEach(async () => db.delete());
+
+  it('stores a socioeconomic assessment and its pending mutation atomically', async () => {
+    const input: SocioeconomicAssessmentInput = {
+      id: crypto.randomUUID(), athleteId: crypto.randomUUID(), instrumentVersion: 1, status: 'COMPLETED',
+      housingType: 'HOUSE', housingTenure: 'RENTED', bedrooms: 2, householdSize: 4, zone: 'URBAN',
+      utilities: ['ELECTRICITY', 'POTABLE_WATER'], exclusiveKitchen: true, transportMode: 'PUBLIC_TRANSPORT',
+      travelTime: 'FROM_31_TO_60', transportDifficulty: 'FREQUENTLY', foodReduction: 'SOMETIMES',
+      foodBeforeTraining: 'SOMETIMES', incomeRange: 'UNDER_1_SMMLV', dependents: 3,
+      informedObservation: 'Dato ficticio', professionalAssessment: 'Valoración ficticia', completedAt: new Date().toISOString(), version: 0,
+    };
+    await saveAssessmentOffline(input);
+    expect((await db.socioeconomicAssessments.get(input.id))?.syncStatus).toBe('pending');
+    expect(await db.syncQueue.where('entityType').equals('socioeconomic-assessment').count()).toBe(1);
+  });
+
+  it('stores follow-up cases for field work', async () => {
+    const id = crypto.randomUUID();
+    await saveFollowUpOffline({ id, athleteId: crypto.randomUUID(), motive: 'Transporte', priority: 'HIGH', status: 'OPEN', responsible: 'Laura Martínez', nextAction: 'Contactar familia', estimatedDate: '2026-09-01', version: 0 });
+    expect(await db.followUps.get(id)).toMatchObject({ status: 'OPEN', priority: 'HIGH', syncStatus: 'pending' });
+  });
+
+  it('downloads a campaign structure to the local replica before field work', async () => {
+    const instrument: ScreeningInstrumentData = { id: crypto.randomUUID(), name: 'Preventivo', version: 1, active: true, questions: [{ id: crypto.randomUUID(), dimension: 'Apoyo', prompt: '¿Cuenta con apoyo?', type: 'YES_NO', options: ['Sí','No'], required: true, position: 1 }] };
+    const athleteId = crypto.randomUUID();
+    const input: ScreeningCampaignInput = { id: crypto.randomUUID(), name: 'Brigada QA', date: '2026-08-27', place: 'Lugar QA', instrumentId: instrument.id, professionalName: 'Laura', athleteIds: [athleteId], status: 'ACTIVE', version: 0 };
+    await saveCampaignOffline(input, instrument, { [athleteId]: 'Deportista QA' });
+    const saved = await db.campaigns.get(input.id);
+    expect(saved?.participants[0]).toMatchObject({ athleteName: 'Deportista QA', status: 'PENDING' });
+    expect(await db.syncQueue.where('entityType').equals('campaign').count()).toBe(1);
+  });
+});

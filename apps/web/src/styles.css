@@ -1,0 +1,23 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Inter:wght@400;500;600;700&display=swap');
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root { color: #18372f; background: #f5f7f3; font-synthesis: none; }
+* { box-sizing: border-box; }
+body { margin: 0; min-width: 320px; min-height: 100vh; background: #f5f7f3; }
+button, input { font: inherit; }
+button:focus-visible, a:focus-visible, input:focus-visible { outline: 3px solid #df7251; outline-offset: 2px; }
+
+@layer components {
+  .card { @apply rounded-2xl border border-white/80 bg-white shadow-soft; }
+  .btn-primary { @apply inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-pine-800 px-5 py-3 font-semibold text-white transition hover:bg-pine-700 disabled:cursor-not-allowed disabled:opacity-60; }
+  .btn-secondary { @apply inline-flex min-h-12 items-center justify-center gap-2 rounded-xl border border-pine-100 bg-white px-5 py-3 font-semibold text-pine-800 transition hover:bg-pine-50; }
+  .field { @apply min-h-12 w-full rounded-xl border border-slate-200 bg-white px-4 text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-pine-500 focus:ring-4 focus:ring-pine-100; }
+}
+
+@media print {
+  aside, nav, header[role="banner"] { display: none !important; }
+  body { background: white; }
+  .card { box-shadow: none !important; }
+}

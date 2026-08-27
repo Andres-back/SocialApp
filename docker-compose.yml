@@ -1,0 +1,58 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: socialapp-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: socialapp
+      POSTGRES_USER: socialapp
+      POSTGRES_PASSWORD: socialapp_dev
+    ports:
+      - "5440:5432"
+    volumes:
+      - socialapp_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U socialapp -d socialapp"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    container_name: socialapp-api
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://socialapp:socialapp_dev@postgres:5432/socialapp?schema=public
+      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:-dev-compose-access-secret-change-before-production}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-dev-compose-refresh-secret-change-before-production}
+      JWT_ACCESS_TTL: 15m
+      JWT_REFRESH_TTL_DAYS: 7
+      WEB_ORIGIN: http://localhost:8081
+      PORT: 3000
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:3000/api/v1/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      args:
+        VITE_API_URL: /api/v1
+    container_name: socialapp-web
+    restart: unless-stopped
+    ports:
+      - "8081:80"
+    depends_on:
+      api:
+        condition: service_healthy
+
+volumes:
+  socialapp_postgres_data:

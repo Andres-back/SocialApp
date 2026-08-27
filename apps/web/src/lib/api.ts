@@ -1,0 +1,123 @@
+import type { AlertData, AthleteInput, AthleteRecord, AthleteWorkspace, AuthSession, DashboardData, FollowUpCaseData, FollowUpCaseInput, FollowUpEntryData, FollowUpEntryInput, NetworkDiagramData, ProfessionalObservationData, ReportPopulationData, ScreeningCampaignData, ScreeningCampaignInput, ScreeningInstrumentData, SocialRecordData, SocialRecordInput, SocioeconomicAssessmentData, SocioeconomicAssessmentInput, SportsCatalogs, SyncMutation, SyncPushResponse } from '@socialapp/shared';
+
+const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:3000/api/v1';
+let accessToken: string | null = sessionStorage.getItem('socialapp.accessToken');
+let activeRefresh: Promise<AuthSession | null> | null = null;
+
+export function setAccessToken(token: string | null) {
+  accessToken = token;
+  if (token) sessionStorage.setItem('socialapp.accessToken', token);
+  else sessionStorage.removeItem('socialapp.accessToken');
+}
+
+async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
+  const headers = new Headers(init.headers);
+  if (init.body) headers.set('Content-Type', 'application/json');
+  if (accessToken) headers.set('Authorization', `Bearer ${accessToken}`);
+
+  const response = await fetch(`${API_URL}${path}`, {
+    ...init,
+    headers,
+    credentials: 'include',
+  });
+  if (!response.ok) {
+    const body = (await response.json().catch(() => null)) as { message?: string } | null;
+    throw new Error(body?.message ?? 'No fue posible completar la solicitud.');
+  }
+  if (response.status === 204) return null as T;
+  return response.json() as Promise<T>;
+}
+
+export const api = {
+  login(email: string, password: string) {
+    return request<AuthSession>('/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ email, password }),
+    });
+  },
+  refresh() {
+    if (!activeRefresh) {
+      activeRefresh = request<AuthSession | null>('/auth/refresh', { method: 'POST' })
+        .finally(() => { activeRefresh = null; });
+    }
+    return activeRefresh;
+  },
+  logout() {
+    return request<{ success: boolean }>('/auth/logout', { method: 'POST' });
+  },
+  health() {
+    return request<{ status: string }>('/health');
+  },
+  pushMutations(mutations: SyncMutation[]) {
+    return request<SyncPushResponse>('/sync/push', {
+      method: 'POST',
+      body: JSON.stringify({ mutations }),
+    });
+  },
+  listAthletes(search = '') {
+    const query = search ? `?search=${encodeURIComponent(search)}` : '';
+    return request<AthleteRecord[]>(`/athletes${query}`);
+  },
+  getAthlete(id: string) {
+    return request<AthleteRecord>(`/athletes/${id}`);
+  },
+  saveAthlete(input: AthleteInput) {
+    return request<AthleteRecord>('/athletes', { method: 'POST', body: JSON.stringify(input) });
+  },
+  getSportsCatalogs() {
+    return request<SportsCatalogs>('/catalogs/sports');
+  },
+  getSocialRecord(athleteId: string) {
+    return request<SocialRecordData | null>(`/athletes/${athleteId}/social-record`);
+  },
+  saveSocialRecord(input: SocialRecordInput) {
+    return request<SocialRecordData>(`/athletes/${input.athleteId}/social-record`, { method: 'PUT', body: JSON.stringify(input) });
+  },
+  getWorkspace(athleteId: string) {
+    return request<AthleteWorkspace>(`/athletes/${athleteId}/workspace`);
+  },
+  saveAssessment(input: SocioeconomicAssessmentInput) {
+    return request<SocioeconomicAssessmentData>(`/athletes/${input.athleteId}/socioeconomic-assessment`, { method: 'PUT', body: JSON.stringify(input) });
+  },
+  saveAlert(input: AlertData) {
+    return request<AlertData>(`/athletes/${input.athleteId}/alerts`, { method: 'POST', body: JSON.stringify(input) });
+  },
+  updateAlert(input: AlertData) {
+    return request<AlertData>(`/alerts/${input.id}`, { method: 'PATCH', body: JSON.stringify(input) });
+  },
+  saveFollowUp(input: FollowUpCaseInput) {
+    return request<FollowUpCaseData>(`/athletes/${input.athleteId}/follow-ups`, { method: 'POST', body: JSON.stringify(input) });
+  },
+  updateFollowUp(input: FollowUpCaseInput) {
+    return request<FollowUpCaseData>(`/follow-ups/${input.id}`, { method: 'PATCH', body: JSON.stringify(input) });
+  },
+  saveFollowUpEntry(input: FollowUpEntryInput) {
+    return request<FollowUpEntryData>(`/follow-ups/${input.followUpCaseId}/entries`, { method: 'POST', body: JSON.stringify(input) });
+  },
+  saveObservation(input: ProfessionalObservationData) {
+    return request<ProfessionalObservationData>(`/athletes/${input.athleteId}/observations`, { method: 'POST', body: JSON.stringify(input) });
+  },
+  saveDiagram(type: 'genogram' | 'ecomap', input: NetworkDiagramData) {
+    return request<NetworkDiagramData>(`/athletes/${input.athleteId}/${type}`, { method: 'PUT', body: JSON.stringify(input) });
+  },
+  listInstruments() { return request<ScreeningInstrumentData[]>('/campaigns/instruments'); },
+  listCampaigns() { return request<ScreeningCampaignData[]>('/campaigns'); },
+  getCampaign(id: string) { return request<ScreeningCampaignData>(`/campaigns/${id}`); },
+  saveCampaign(input: ScreeningCampaignInput) { return request<ScreeningCampaignData>('/campaigns', { method: 'POST', body: JSON.stringify(input) }); },
+  saveScreeningResult(campaignId: string, athleteId: string, input: Record<string, unknown>) {
+    return request(`/campaigns/${campaignId}/participants/${athleteId}`, { method: 'PUT', body: JSON.stringify(input) });
+  },
+  dashboard() { return request<DashboardData>('/dashboard'); },
+  populationReport(filters: Record<string, string> = {}) {
+    const query = new URLSearchParams(filters).toString();
+    return request<ReportPopulationData>(`/reports/population${query ? `?${query}` : ''}`);
+  },
+  individualReport(athleteId: string) { return request(`/reports/athletes/${athleteId}`); },
+  auditExport(type: string, athleteId?: string) { return request<{ success: boolean }>('/reports/export-audit', { method: 'POST', body: JSON.stringify({ type, athleteId }) }); },
+  adminOverview() { return request<Record<string, unknown>>('/admin/overview'); },
+  createCatalog(kind: string, name: string) { return request(`/admin/catalogs/${kind}`, { method: 'POST', body: JSON.stringify({ name }) }); },
+  saveRule(body: Record<string, unknown>) { return request('/admin/rules', { method: 'POST', body: JSON.stringify(body) }); },
+  saveInstrument(body: Record<string, unknown>) { return request('/admin/instruments', { method: 'POST', body: JSON.stringify(body) }); },
+  createUser(body: Record<string, unknown>) { return request('/admin/users', { method: 'POST', body: JSON.stringify(body) }); },
+  updateUserStatus(id: string, status: string) { return request(`/admin/users/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status }) }); },
+};
