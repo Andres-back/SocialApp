@@ -87,5 +87,5 @@ export async function enqueueMutation(
 }
 
 export async function pendingCount(): Promise<number> {
-  return db.syncQueue.where('status').anyOf(['pending', 'error', 'conflict']).count();
+  return db.syncQueue.where('status').anyOf(['pending', 'processing', 'error', 'conflict']).count();
 }

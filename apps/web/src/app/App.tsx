@@ -20,6 +20,7 @@ const CampaignsPage = lazy(() => import('../pages/CampaignsPage').then((module) 
 const CampaignFormPage = lazy(() => import('../pages/CampaignFormPage').then((module) => ({ default: module.CampaignFormPage })));
 const CampaignModePage = lazy(() => import('../pages/CampaignModePage').then((module) => ({ default: module.CampaignModePage })));
 const ScreeningFormPage = lazy(() => import('../pages/ScreeningFormPage').then((module) => ({ default: module.ScreeningFormPage })));
+const ScreeningResultPage = lazy(() => import('../pages/ScreeningResultPage').then((module) => ({ default: module.ScreeningResultPage })));
 const ReportsPage = lazy(() => import('../pages/ReportsPage').then((module) => ({ default: module.ReportsPage })));
 const AdminPage = lazy(() => import('../pages/AdminPage').then((module) => ({ default: module.AdminPage })));
 const IndividualReportPage = lazy(() => import('../pages/IndividualReportPage').then((module) => ({ default: module.IndividualReportPage })));
@@ -45,8 +46,10 @@ function ProtectedApp() {
         <Route path="/trabajo-social" element={<Gate can={can} permission={PERMISSIONS.SOCIAL_RECORD_READ}><WorkOverviewPage /></Gate>} />
         <Route path="/brigadas" element={<Gate can={can} permission={PERMISSIONS.SCREENING_READ}><CampaignsPage /></Gate>} />
         <Route path="/brigadas/nueva" element={<Gate can={can} permission={PERMISSIONS.SCREENING_WRITE}><CampaignFormPage /></Gate>} />
+        <Route path="/brigadas/:id/editar" element={<Gate can={can} permission={PERMISSIONS.SCREENING_WRITE}><CampaignFormPage /></Gate>} />
         <Route path="/brigadas/:id" element={<Gate can={can} permission={PERMISSIONS.SCREENING_READ}><CampaignModePage /></Gate>} />
         <Route path="/brigadas/:id/deportistas/:athleteId" element={<Gate can={can} permission={PERMISSIONS.SCREENING_WRITE}><ScreeningFormPage /></Gate>} />
+        <Route path="/brigadas/:id/resultados/:athleteId" element={<Gate can={can} permission={PERMISSIONS.SCREENING_READ}><ScreeningResultPage /></Gate>} />
         <Route path="/reportes" element={<Gate can={can} permission={PERMISSIONS.DASHBOARD_AGGREGATE_READ}><ReportsPage /></Gate>} />
         <Route path="/reportes/deportistas/:id" element={<Gate can={can} permission={PERMISSIONS.SOCIAL_RECORD_READ}><IndividualReportPage /></Gate>} />
         <Route path="/administracion" element={<Gate can={can} permission={PERMISSIONS.ADMIN_USERS}><AdminPage /></Gate>} />

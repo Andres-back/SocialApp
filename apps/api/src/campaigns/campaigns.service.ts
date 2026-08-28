@@ -1,6 +1,6 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import { matchesConfigurableRule, type CampaignParticipantData, type ScreeningCampaignData, type ScreeningCampaignInput, type ScreeningInstrumentData } from '@socialapp/shared';
+import { matchesConfigurableRule, validateScreeningResponses, type CampaignParticipantData, type ScreeningCampaignData, type ScreeningCampaignInput, type ScreeningInstrumentData, type ScreeningQuestionData } from '@socialapp/shared';
 import { AuditService } from '../audit/audit.service';
 import { PrismaService } from '../prisma/prisma.service';
 
@@ -40,8 +40,19 @@ export class CampaignsService {
   }
   async upsert(userId: string, input: ScreeningCampaignInput, baseVersion: number): Promise<ScreeningCampaignData> {
     if (!input.id || !input.name || !input.date || !input.place || !input.instrumentId) throw new BadRequestException('Completa los datos obligatorios de la brigada.');
+    if (input.athleteIds.length === 0) throw new BadRequestException('Selecciona al menos un deportista para la brigada.');
+    if (new Set(input.athleteIds).size !== input.athleteIds.length) throw new BadRequestException('La población asignada contiene deportistas duplicados.');
     const existing = await this.prisma.screeningCampaign.findUnique({ where: { id: input.id } });
     if (existing && existing.version !== baseVersion) throw new ConflictException('Existe una versión más reciente de la brigada.');
+    const assignedAthletes = await this.prisma.athlete.count({ where: { id: { in: input.athleteIds }, status: 'ACTIVE', deletedAt: null } });
+    if (assignedAthletes !== input.athleteIds.length) throw new BadRequestException('Uno o más deportistas no están activos o ya no están disponibles.');
+    if (existing) {
+      const participants = await this.prisma.campaignParticipant.findMany({ where: { campaignId: input.id, deletedAt: null } });
+      const protectedParticipants = participants.filter((participant) => participant.status !== 'PENDING');
+      if (existing.instrumentId !== input.instrumentId && protectedParticipants.length > 0) throw new BadRequestException('No puedes cambiar el instrumento después de iniciar tamizajes.');
+      const removedStarted = protectedParticipants.some((participant) => !input.athleteIds.includes(participant.athleteId));
+      if (removedStarted) throw new BadRequestException('No puedes retirar deportistas con tamizajes iniciados o completados.');
+    }
     const data = { name: input.name, date: new Date(input.date), place: input.place, sportsProgramId: input.sportsProgramId || null, sportId: input.sportId || null, instrumentId: input.instrumentId, professionalName: input.professionalName, status: input.status };
     const saved = await this.prisma.$transaction(async (tx) => {
       const campaign = existing
@@ -51,6 +62,10 @@ export class CampaignsService {
         await tx.campaignParticipant.upsert({ where: { campaignId_athleteId: { campaignId: campaign.id, athleteId } }, update: { deletedAt: null, updatedBy: userId }, create: { campaignId: campaign.id, athleteId, createdBy: userId, updatedBy: userId } });
       }
       await tx.campaignParticipant.updateMany({ where: { campaignId: campaign.id, athleteId: { notIn: input.athleteIds }, status: 'PENDING' }, data: { deletedAt: new Date(), updatedBy: userId } });
+      if (input.status === 'COMPLETED') {
+        const incomplete = await tx.campaignParticipant.count({ where: { campaignId: campaign.id, deletedAt: null, status: { not: 'COMPLETED' } } });
+        if (incomplete > 0) throw new BadRequestException('Completa todos los tamizajes antes de cerrar la brigada.');
+      }
       return tx.screeningCampaign.findUniqueOrThrow({ where: { id: campaign.id }, include: campaignInclude });
     });
     await this.audit.record({ actorUserId: userId, action: existing ? 'campaign.update' : 'campaign.create', resourceType: 'ScreeningCampaign', resourceId: saved.id });
@@ -58,17 +73,26 @@ export class CampaignsService {
   }
   async saveResult(userId: string, input: ScreeningResultInput): Promise<CampaignParticipantData> {
     if (!input.campaignId || !input.athleteId || !input.id) throw new BadRequestException('No fue posible identificar el tamizaje.');
-    const existing = await this.prisma.campaignParticipant.findUnique({ where: { campaignId_athleteId: { campaignId: input.campaignId, athleteId: input.athleteId } }, include: { athlete: true } });
+    const existing = await this.prisma.campaignParticipant.findUnique({
+      where: { campaignId_athleteId: { campaignId: input.campaignId, athleteId: input.athleteId } },
+      include: { athlete: true, campaign: { include: { instrument: { include: { questions: { where: { deletedAt: null }, orderBy: { position: 'asc' } } } } } } },
+    });
     if (!existing) throw new NotFoundException('El deportista no está asignado a esta brigada.');
+    if (existing.campaign.status !== 'ACTIVE') throw new BadRequestException(existing.campaign.status === 'COMPLETED' ? 'Reabre la brigada antes de modificar un resultado.' : 'Inicia la jornada antes de aplicar el instrumento.');
     if (existing.version !== input.version) throw new ConflictException('Existe una versión más reciente del tamizaje.');
+    const questions = existing.campaign.instrument.questions.map((question) => ({
+      id: question.id, dimension: question.dimension, prompt: question.prompt, type: question.type, options: question.options as string[], required: question.required, position: question.position,
+    })) as ScreeningQuestionData[];
+    const validationErrors = validateScreeningResponses(questions, input.responses, input.status === 'COMPLETED');
+    if (validationErrors.length > 0) throw new BadRequestException(validationErrors);
     const saved = await this.prisma.campaignParticipant.update({ where: { id: existing.id }, data: { status: input.status, responses: input.responses as Prisma.InputJsonValue, completedAt: input.completedAt ? new Date(input.completedAt) : input.status === 'COMPLETED' ? new Date() : null, updatedBy: userId, version: { increment: 1 } }, include: { athlete: true } });
-    await this.evaluateRules(userId, saved.id, saved.athleteId, input.responses);
+    if (input.status === 'COMPLETED') await this.evaluateRules(userId, saved.id, saved.athleteId, input.responses);
     await this.audit.record({ actorUserId: userId, action: 'screening.save', resourceType: 'CampaignParticipant', resourceId: saved.id });
     return this.serializeParticipant(saved);
   }
   async applySync(userId: string, entityType: string, payload: unknown, baseVersion: number): Promise<number> {
     if (entityType === 'campaign') return (await this.upsert(userId, payload as ScreeningCampaignInput, baseVersion)).version;
-    if (entityType === 'screening-result') { const result = await this.saveResult(userId, payload as ScreeningResultInput); return result.status === 'COMPLETED' ? 2 : 1; }
+    if (entityType === 'screening-result') return (await this.saveResult(userId, payload as ScreeningResultInput)).version;
     throw new BadRequestException('La entidad no está habilitada para brigadas.');
   }
   private async evaluateRules(userId: string, sourceId: string, athleteId: string, responses: Record<string, unknown>) {
@@ -84,7 +108,7 @@ export class CampaignsService {
     return { id: item.id, name: item.name, version: item.version, ageGroup: item.ageGroup, active: item.active, questions: item.questions.map((question: any) => ({ id: question.id, dimension: question.dimension, prompt: question.prompt, type: question.type, options: question.options, required: question.required, position: question.position })) };
   }
   private serializeParticipant(item: any): CampaignParticipantData {
-    return { id: item.id, athleteId: item.athleteId, athleteName: `${item.athlete.firstNames} ${item.athlete.lastNames}`, status: item.status, responses: item.responses as Record<string, unknown>, completedAt: item.completedAt?.toISOString() ?? null };
+    return { id: item.id, athleteId: item.athleteId, athleteName: `${item.athlete.firstNames} ${item.athlete.lastNames}`, status: item.status, responses: item.responses as Record<string, unknown>, completedAt: item.completedAt?.toISOString() ?? null, version: item.version };
   }
   private serializeCampaign(item: any): ScreeningCampaignData {
     return { id: item.id, name: item.name, date: item.date.toISOString().slice(0, 10), place: item.place, sportsProgramId: item.sportsProgramId, sportId: item.sportId, instrumentId: item.instrumentId, professionalName: item.professionalName, athleteIds: item.participants.map((participant: any) => participant.athleteId), status: item.status, version: item.version, sportsProgramName: item.sportsProgram?.name ?? null, sportName: item.sport?.name ?? null, instrument: this.serializeInstrument(item.instrument), participants: item.participants.map((participant: any) => this.serializeParticipant(participant)), createdAt: item.createdAt.toISOString(), updatedAt: item.updatedAt.toISOString() };

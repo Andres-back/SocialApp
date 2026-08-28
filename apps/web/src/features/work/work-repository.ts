@@ -76,27 +76,52 @@ export async function saveDiagramOffline(type: 'genogram' | 'ecomap', input: Net
 }
 
 export async function loadCampaigns(): Promise<ScreeningCampaignData[]> {
-  if (navigator.onLine) try { const data = await api.listCampaigns(); await db.campaigns.bulkPut(data.map((item) => ({ ...item, syncStatus: 'synced' as const }))); return data; } catch { /* offline */ }
+  if (navigator.onLine) try {
+    const [data, local, queued] = await Promise.all([api.listCampaigns(), db.campaigns.toArray(), db.syncQueue.where('status').anyOf(['pending', 'processing', 'error', 'conflict']).toArray()]);
+    const dirtyCampaignIds = new Set(queued.filter((mutation) => mutation.entityType === 'campaign').map((mutation) => mutation.entityId));
+    for (const mutation of queued.filter((item) => item.entityType === 'screening-result')) {
+      const owner = local.find((campaign) => campaign.participants.some((participant) => participant.id === mutation.entityId));
+      if (owner) dirtyCampaignIds.add(owner.id);
+    }
+    const pending = new Map(local.filter((item) => dirtyCampaignIds.has(item.id)).map((item) => [item.id, item]));
+    const remote = data.map((item) => ({ ...item, participants: item.participants.map((participant) => ({ ...participant, syncStatus: 'synced' as const })), syncStatus: 'synced' as const }));
+    await db.campaigns.bulkPut(remote.filter((item) => !pending.has(item.id)));
+    return [...remote.map((item) => pending.get(item.id) ?? item), ...local.filter((item) => !data.some((remoteItem) => remoteItem.id === item.id))].sort((a, b) => b.date.localeCompare(a.date));
+  } catch { /* offline */ }
   return db.campaigns.orderBy('date').reverse().toArray();
 }
 export async function loadInstruments(): Promise<ScreeningInstrumentData[]> {
   if (navigator.onLine) try { const data = await api.listInstruments(); await db.instruments.bulkPut(data); return data; } catch { /* offline */ }
   return db.instruments.toArray();
 }
-export async function saveCampaignOffline(input: ScreeningCampaignInput, instrument: ScreeningInstrumentData, athleteNames: Record<string, string>) {
+export async function saveCampaignOffline(input: ScreeningCampaignInput, instrument: ScreeningInstrumentData, athleteNames: Record<string, string>, labels?: { sportsProgramName?: string | null; sportName?: string | null }) {
   const existing = await db.campaigns.get(input.id); const now = new Date().toISOString();
-  const participants = input.athleteIds.map((athleteId) => existing?.participants.find((item) => item.athleteId === athleteId) ?? { id: crypto.randomUUID(), athleteId, athleteName: athleteNames[athleteId] ?? 'Deportista', status: 'PENDING' as const, responses: {} });
-  const record: ScreeningCampaignData = { ...input, instrument, participants, createdAt: existing?.createdAt ?? now, updatedAt: now, syncStatus: 'pending' };
+  const participants = input.athleteIds.map((athleteId) => existing?.participants.find((item) => item.athleteId === athleteId) ?? { id: crypto.randomUUID(), athleteId, athleteName: athleteNames[athleteId] ?? 'Deportista', status: 'PENDING' as const, responses: {}, version: 1, syncStatus: 'pending' as const });
+  const record: ScreeningCampaignData = { ...input, instrument, participants, sportsProgramName: labels?.sportsProgramName ?? existing?.sportsProgramName ?? null, sportName: labels?.sportName ?? existing?.sportName ?? null, createdAt: existing?.createdAt ?? now, updatedAt: now, syncStatus: 'pending' };
   await db.transaction('rw', db.campaigns, db.syncQueue, async () => { await db.campaigns.put(record); await queue('campaign', input.id, input, input.version, existing ? 'update' : 'create'); });
   syncSoon(); return record;
 }
-export async function saveScreeningOffline(campaignId: string, athleteId: string, responses: Record<string, unknown>) {
+export async function saveScreeningProgressOffline(campaignId: string, athleteId: string, responses: Record<string, unknown>, status: 'IN_PROGRESS' | 'COMPLETED') {
   const campaign = await db.campaigns.get(campaignId); if (!campaign) throw new Error('No encontramos la brigada en este dispositivo.');
   const participant = campaign.participants.find((item) => item.athleteId === athleteId); if (!participant) throw new Error('El deportista no está asignado.');
-  const payload = { id: participant.id, campaignId, athleteId, status: 'COMPLETED', responses, completedAt: new Date().toISOString(), version: 1 };
+  if (campaign.status === 'COMPLETED') throw new Error('Reabre la brigada antes de modificar este resultado.');
+  const completedAt = status === 'COMPLETED' ? new Date().toISOString() : null;
+  const payload = { id: participant.id, campaignId, athleteId, status, responses, completedAt, version: participant.version };
   await db.transaction('rw', db.campaigns, db.syncQueue, async () => {
-    await db.campaigns.put({ ...campaign, participants: campaign.participants.map((item) => item.athleteId === athleteId ? { ...item, status: 'COMPLETED', responses, completedAt: payload.completedAt } : item), updatedAt: new Date().toISOString(), syncStatus: 'pending' });
-    await queue('screening-result', participant.id, payload, 1, 'update');
+    await db.campaigns.put({ ...campaign, participants: campaign.participants.map((item) => item.athleteId === athleteId ? { ...item, status, responses, completedAt, syncStatus: 'pending' } : item), updatedAt: new Date().toISOString(), syncStatus: 'pending' });
+    const replaceable = await db.syncQueue.where('entityType').equals('screening-result').filter((item) => item.entityId === participant.id && ['pending', 'error'].includes(item.status)).primaryKeys();
+    await db.syncQueue.bulkDelete(replaceable);
+    await queue('screening-result', participant.id, payload, participant.version, 'update');
   });
   syncSoon();
+}
+export async function saveScreeningOffline(campaignId: string, athleteId: string, responses: Record<string, unknown>) {
+  return saveScreeningProgressOffline(campaignId, athleteId, responses, 'COMPLETED');
+}
+export async function changeCampaignStatusOffline(campaign: ScreeningCampaignData, status: ScreeningCampaignInput['status']) {
+  return saveCampaignOffline({
+    id: campaign.id, name: campaign.name, date: campaign.date, place: campaign.place,
+    sportsProgramId: campaign.sportsProgramId, sportId: campaign.sportId, instrumentId: campaign.instrumentId,
+    professionalName: campaign.professionalName, athleteIds: campaign.participants.map((participant) => participant.athleteId), status, version: campaign.version,
+  }, campaign.instrument, Object.fromEntries(campaign.participants.map((participant) => [participant.athleteId, participant.athleteName])), { sportsProgramName: campaign.sportsProgramName, sportName: campaign.sportName });
 }

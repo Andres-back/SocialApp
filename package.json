@@ -11,7 +11,7 @@
     "dev": "concurrently -n web,api -c cyan,green \"npm run dev -w @socialapp/web\" \"npm run start:dev -w @socialapp/api\"",
     "build": "npm run build -w @socialapp/shared && npm run build -w @socialapp/api && npm run build -w @socialapp/web",
     "test": "npm run test -w @socialapp/shared && npm run test -w @socialapp/api && npm run test -w @socialapp/web",
-    "typecheck": "npm run typecheck -ws --if-present",
+    "typecheck": "npm run build -w @socialapp/shared && npm run typecheck -w @socialapp/shared && npm run typecheck -w @socialapp/api && npm run typecheck -w @socialapp/web",
     "lint": "npm run lint -ws --if-present",
     "format": "prettier --write .",
     "db:generate": "npm run prisma:generate -w @socialapp/api",

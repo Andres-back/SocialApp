@@ -15,6 +15,7 @@ async function executeSync(): Promise<SyncSummary> {
   if (!navigator.onLine) throw new Error('Sin conexión. Tus cambios siguen guardados en este dispositivo.');
 
   await api.health();
+  await db.syncQueue.where('status').equals('processing').modify({ status: 'pending' });
   const batch = await db.syncQueue.where('status').anyOf(['pending', 'error']).limit(50).toArray();
   if (batch.length === 0) return summarize();
 
@@ -49,7 +50,21 @@ async function executeSync(): Promise<SyncSummary> {
           if (current.entityType === 'follow-up') await db.followUps.update(current.entityId, { version: result.serverVersion ?? 1, syncStatus: 'synced' });
           if (current.entityType === 'observation') await db.observations.update(current.entityId, { syncStatus: 'synced' });
           if (current.entityType === 'genogram' || current.entityType === 'ecomap') await db.diagrams.update(current.entityId, { version: result.serverVersion ?? 1, syncStatus: 'synced' });
-          if (current.entityType === 'campaign') await db.campaigns.update(current.entityId, { version: result.serverVersion ?? 1, syncStatus: 'synced' });
+          if (current.entityType === 'campaign') {
+            const campaign = await db.campaigns.get(current.entityId);
+            if (campaign) await db.campaigns.put({ ...campaign, version: result.serverVersion ?? 1, syncStatus: 'synced', participants: campaign.participants.map((participant) => ({ ...participant, syncStatus: 'synced' })) });
+          }
+          if (current.entityType === 'screening-result') {
+            const campaigns = await db.campaigns.toArray();
+            const campaign = campaigns.find((item) => item.participants.some((participant) => participant.id === current.entityId));
+            if (campaign) {
+              const version = result.serverVersion ?? 1;
+              const participants = campaign.participants.map((participant) => participant.id === current.entityId ? { ...participant, version, syncStatus: 'synced' as const } : participant);
+              await db.campaigns.put({ ...campaign, syncStatus: participants.every((participant) => !participant.syncStatus || participant.syncStatus === 'synced') ? 'synced' : 'pending', participants });
+              const queued = await db.syncQueue.where('entityType').equals('screening-result').filter((item) => item.entityId === current.entityId && item.mutationId !== current.mutationId).toArray();
+              for (const next of queued) await db.syncQueue.update(next.mutationId, { baseVersion: version, payload: { ...(next.payload as Record<string, unknown>), version } });
+            }
+          }
           await db.syncQueue.delete(result.mutationId);
         } else {
           if (current.entityType === 'athlete') await db.athletes.update(current.entityId, { syncStatus: result.status === 'conflict' ? 'conflict' : 'error' });
@@ -60,6 +75,11 @@ async function executeSync(): Promise<SyncSummary> {
           if (current.entityType === 'observation') await db.observations.update(current.entityId, { syncStatus: result.status === 'conflict' ? 'conflict' : 'error' });
           if (current.entityType === 'genogram' || current.entityType === 'ecomap') await db.diagrams.update(current.entityId, { syncStatus: result.status === 'conflict' ? 'conflict' : 'error' });
           if (current.entityType === 'campaign') await db.campaigns.update(current.entityId, { syncStatus: result.status === 'conflict' ? 'conflict' : 'error' });
+          if (current.entityType === 'screening-result') {
+            const campaigns = await db.campaigns.toArray();
+            const campaign = campaigns.find((item) => item.participants.some((participant) => participant.id === current.entityId));
+            if (campaign) await db.campaigns.put({ ...campaign, syncStatus: result.status === 'conflict' ? 'conflict' : 'error', participants: campaign.participants.map((participant) => participant.id === current.entityId ? { ...participant, syncStatus: result.status === 'conflict' ? 'conflict' : 'error' } : participant) });
+          }
           await db.syncQueue.update(result.mutationId, {
             status: result.status === 'conflict' ? 'conflict' : 'error',
             attempts: current.attempts + 1,
@@ -96,12 +116,17 @@ async function summarize(): Promise<SyncSummary> {
 }
 
 export function synchronize(): Promise<SyncSummary> {
-  if (!activeSync) activeSync = executeSync().finally(() => { activeSync = null; });
+  if (!activeSync) activeSync = (async () => {
+    let summary = await executeSync();
+    while (await db.syncQueue.where('status').equals('pending').count()) summary = await executeSync();
+    return summary;
+  })().finally(() => { activeSync = null; });
   return activeSync;
 }
 
 export function setupAutomaticSync(onComplete?: () => void): () => void {
   const handler = () => void synchronize().then(onComplete).catch(() => undefined);
   window.addEventListener('online', handler);
+  if (navigator.onLine) handler();
   return () => window.removeEventListener('online', handler);
 }

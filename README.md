@@ -76,7 +76,7 @@ No use estas credenciales ni los secretos de `.env.example` en producción.
 4. Alertas automáticas revisables, valoración profesional y trazabilidad separada del dato informado.
 5. Casos de seguimiento, intervenciones, acuerdos, responsables, agenda y estados.
 6. Observaciones profesionales con visibilidad, línea de tiempo, familiograma y ecomapa editables.
-7. Instrumentos versionados, brigadas, población asignada y tamizajes offline.
+7. Instrumentos versionados y brigadas planeadas, activas o finalizadas, con filtros de población, asignación de deportistas, avance por participante, tamizajes reanudables y resultados imprimibles.
 8. Tablero, reportes agregados, reporte individual, exportación CSV compatible con Excel e impresión/PDF auditada.
 9. Administración de usuarios, estados, roles, catálogos, instrumentos, reglas y consulta de auditoría.
 10. PWA instalable, borradores locales, cola idempotente, conflictos optimistas y sincronización al reconectar.
@@ -88,6 +88,8 @@ Los datos informados y la observación profesional se presentan en campos separa
 La compilación de producción registra un Service Worker que guarda el *app shell*. Dexie persiste borradores y una cola de mutaciones en IndexedDB. La cola nunca elimina una mutación hasta que el servidor confirma su recepción. En desarrollo, el Service Worker está habilitado para poder verificar este flujo.
 
 Para probarlo: ejecute `npm run build -w @socialapp/web` y `npm run preview -w @socialapp/web`, abra la aplicación una vez, active el modo sin conexión en las herramientas del navegador y recargue.
+
+En las brigadas, cada respuesta se conserva localmente como avance y se sincroniza al recuperar la conexión. Una jornada solo puede cerrarse cuando todos sus participantes tienen el tamizaje completo; los resultados cerrados quedan disponibles en modo de consulta e impresión.
 
 ## Migraciones
 

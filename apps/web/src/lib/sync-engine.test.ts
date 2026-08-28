@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { AthleteRecord } from '@socialapp/shared';
+import type { AthleteRecord, ScreeningCampaignData } from '@socialapp/shared';
 import { api } from './api';
 import { db } from './db';
 import { synchronize } from './sync-engine';
@@ -81,5 +81,36 @@ describe('sync engine', () => {
     await expect(synchronize()).resolves.toMatchObject({ pending: 0, errors: 0, conflicts: 0 });
     expect(await db.syncQueue.count()).toBe(0);
     expect(await db.athletes.get(athlete.id)).toMatchObject({ version: 1, syncStatus: 'synced' });
+  });
+
+  it('advances the nested participant version after a screening result is accepted', async () => {
+    const mutationId = crypto.randomUUID();
+    const participantId = crypto.randomUUID();
+    const campaign: ScreeningCampaignData = {
+      id: crypto.randomUUID(), name: 'Brigada QA', date: '2026-08-27', place: 'Sede QA', instrumentId: 'instrument-1',
+      professionalName: 'Laura', athleteIds: [athlete.id], status: 'ACTIVE', version: 1,
+      instrument: { id: 'instrument-1', name: 'Preventivo', version: 1, active: true, questions: [{ id: 'q1', dimension: 'Apoyo', prompt: '¿Cuenta con apoyo?', type: 'YES_NO', options: ['Sí', 'No'], required: true, position: 1 }] },
+      participants: [{ id: participantId, athleteId: athlete.id, athleteName: 'Valentina Prueba', status: 'IN_PROGRESS', responses: { q1: 'Sí' }, version: 1, syncStatus: 'pending' }],
+      createdAt: athlete.createdAt, updatedAt: athlete.updatedAt, syncStatus: 'pending',
+    };
+    await db.campaigns.put(campaign);
+    await db.syncQueue.put({ mutationId, entityType: 'screening-result', entityId: participantId, operation: 'update', baseVersion: 1, occurredAt: athlete.updatedAt, payload: { id: participantId, campaignId: campaign.id, athleteId: athlete.id, status: 'IN_PROGRESS', responses: { q1: 'Sí' }, version: 1 }, status: 'pending', attempts: 0 });
+    vi.mocked(api.pushMutations).mockResolvedValue({ results: [{ mutationId, status: 'accepted', serverVersion: 2 }], serverTime: '2026-08-27T00:00:01.000Z' });
+
+    await synchronize();
+
+    expect((await db.campaigns.get(campaign.id))?.participants[0]).toMatchObject({ version: 2, syncStatus: 'synced' });
+    expect(await db.syncQueue.count()).toBe(0);
+  });
+
+  it('recovers a mutation left processing after an interrupted page lifecycle', async () => {
+    const mutationId = crypto.randomUUID();
+    await db.athletes.put(athlete);
+    await db.syncQueue.put({ mutationId, entityType: 'athlete', entityId: athlete.id, operation: 'create', baseVersion: 0, occurredAt: athlete.updatedAt, payload: athlete, status: 'processing', attempts: 0 });
+    vi.mocked(api.pushMutations).mockResolvedValue({ results: [{ mutationId, status: 'accepted', serverVersion: 1 }], serverTime: '2026-08-27T00:00:01.000Z' });
+
+    await synchronize();
+
+    expect(await db.syncQueue.count()).toBe(0);
   });
 });

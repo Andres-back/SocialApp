@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { ScreeningCampaignInput, ScreeningInstrumentData, SocioeconomicAssessmentInput } from '@socialapp/shared';
 import { db } from '../../lib/db';
-import { saveAssessmentOffline, saveCampaignOffline, saveFollowUpOffline } from './work-repository';
+import { saveAssessmentOffline, saveCampaignOffline, saveFollowUpOffline, saveScreeningProgressOffline } from './work-repository';
 
 describe('offline social work repository', () => {
   beforeEach(async () => {
@@ -39,5 +39,17 @@ describe('offline social work repository', () => {
     const saved = await db.campaigns.get(input.id);
     expect(saved?.participants[0]).toMatchObject({ athleteName: 'Deportista QA', status: 'PENDING' });
     expect(await db.syncQueue.where('entityType').equals('campaign').count()).toBe(1);
+  });
+
+  it('keeps partial screening answers and coalesces pending mutations', async () => {
+    const instrument: ScreeningInstrumentData = { id: crypto.randomUUID(), name: 'Preventivo', version: 1, active: true, questions: [{ id: 'q1', dimension: 'Apoyo', prompt: '¿Cuenta con apoyo?', type: 'YES_NO', options: ['Sí','No'], required: true, position: 1 }] };
+    const athleteId = crypto.randomUUID();
+    const campaignId = crypto.randomUUID();
+    await saveCampaignOffline({ id: campaignId, name: 'Brigada QA', date: '2026-08-27', place: 'Lugar QA', instrumentId: instrument.id, professionalName: 'Laura', athleteIds: [athleteId], status: 'ACTIVE', version: 0 }, instrument, { [athleteId]: 'Deportista QA' });
+    await saveScreeningProgressOffline(campaignId, athleteId, { q1: 'Sí' }, 'IN_PROGRESS');
+    await saveScreeningProgressOffline(campaignId, athleteId, { q1: 'No' }, 'IN_PROGRESS');
+    const saved = await db.campaigns.get(campaignId);
+    expect(saved?.participants[0]).toMatchObject({ status: 'IN_PROGRESS', responses: { q1: 'No' }, syncStatus: 'pending' });
+    expect(await db.syncQueue.where('entityType').equals('screening-result').count()).toBe(1);
   });
 });

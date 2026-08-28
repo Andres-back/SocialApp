@@ -353,6 +353,8 @@ export interface CampaignParticipantData {
   status: ScreeningParticipantStatus;
   responses: Record<string, unknown>;
   completedAt?: string | null;
+  version: number;
+  syncStatus?: SyncStatus;
 }
 export interface ScreeningCampaignInput {
   id: string;
@@ -455,4 +457,32 @@ export function matchesConfigurableRule(rule: Pick<ConfigurableRuleData, 'field'
   if (rule.operator === 'INCLUDES') return Array.isArray(actual) && actual.map(String).includes(rule.expectedValue);
   if (rule.operator === 'GREATER_THAN') return Number.isFinite(Number(actual)) && Number(actual) > Number(rule.expectedValue);
   return false;
+}
+
+export function validateScreeningResponses(
+  questions: ScreeningQuestionData[],
+  responses: Record<string, unknown>,
+  requireComplete = true,
+): string[] {
+  const errors: string[] = [];
+  const questionIds = new Set(questions.map((question) => question.id));
+  for (const responseId of Object.keys(responses)) {
+    if (!questionIds.has(responseId)) errors.push('El resultado contiene una respuesta que no pertenece al instrumento.');
+  }
+  for (const question of questions) {
+    const value = responses[question.id];
+    const empty = value === undefined || value === null || value === '' || (Array.isArray(value) && value.length === 0);
+    if (empty) {
+      if (requireComplete && question.required) errors.push(`Falta responder: ${question.prompt}`);
+      continue;
+    }
+    if (question.type === 'TEXT' && typeof value !== 'string') errors.push(`La respuesta de “${question.prompt}” debe ser texto.`);
+    if (question.type === 'NUMBER' && (typeof value !== 'number' || !Number.isFinite(value))) errors.push(`La respuesta de “${question.prompt}” debe ser numérica.`);
+    if (question.type === 'MULTIPLE_CHOICE') {
+      if (!Array.isArray(value) || value.some((option) => typeof option !== 'string' || !question.options.includes(option))) errors.push(`La respuesta de “${question.prompt}” contiene opciones inválidas.`);
+    } else if (['YES_NO', 'SINGLE_CHOICE', 'SCALE'].includes(question.type) && (typeof value !== 'string' || !question.options.includes(value))) {
+      errors.push(`La respuesta de “${question.prompt}” no corresponde a una opción válida.`);
+    }
+  }
+  return errors;
 }
