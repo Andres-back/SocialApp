@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AthleteInput, SocialRecordInput, SportsCatalogs } from '@socialapp/shared';
-import { api, ApiRequestError } from '../../lib/api';
+import { api } from '../../lib/api';
 import { db } from '../../lib/db';
 import { loadAthlete, loadAthletes, loadSocialRecord, saveAthleteOffline, saveSocialRecordOffline } from './athlete-repository';
 
@@ -89,9 +89,12 @@ describe('athlete offline repository', () => {
     await db.athletes.update(athlete.id, { syncStatus: 'synced' });
     await db.syncQueue.clear();
     Object.defineProperty(navigator, 'onLine', { configurable: true, value: true });
-    vi.spyOn(api, 'getAthlete').mockRejectedValue(new ApiRequestError('No encontramos este deportista.', 404));
+    const list = vi.spyOn(api, 'listAthletes').mockResolvedValue([]);
+    const detail = vi.spyOn(api, 'getAthlete');
 
     expect(await loadAthlete(athlete.id)).toBeUndefined();
     expect(await db.athletes.get(athlete.id)).toBeUndefined();
+    expect(list).toHaveBeenCalledOnce();
+    expect(detail).not.toHaveBeenCalled();
   });
 });

@@ -70,6 +70,20 @@ export async function loadAthlete(id: string): Promise<AthleteRecord | undefined
         // The local record remains usable while synchronization is retried.
       }
     }
+    if (local && (!local.syncStatus || local.syncStatus === 'synced')) {
+      try {
+        const remote = (await api.listAthletes()).find((item) => item.id === id);
+        if (!remote) {
+          await db.athletes.delete(id);
+          return undefined;
+        }
+        const item = { ...remote, syncStatus: 'synced' as const };
+        await db.athletes.put(item);
+        return item;
+      } catch {
+        // Fall through to the individual endpoint when the list is unavailable.
+      }
+    }
     try {
       const remote = await api.getAthlete(id);
       const item = { ...remote, syncStatus: 'synced' as const };
