@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Activity, ArrowLeft, BookOpen, CalendarDays, CheckCircle2, ClipboardEdit, Edit3, GraduationCap, Home, MapPin, Network, Phone, RefreshCw, ShieldAlert, UserRound, UsersRound } from 'lucide-react';
 import { Link, useLocation, useParams } from 'react-router-dom';
-import { PERMISSIONS, type AthleteRecord } from '@socialapp/shared';
+import { PERMISSIONS, screeningAgeGroup, type AthleteRecord } from '@socialapp/shared';
 import { useAuth } from '../features/auth/useAuth';
 import { loadAthlete, loadSocialRecord } from '../features/athletes/athlete-repository';
 import { loadWorkspace } from '../features/work/work-repository';
@@ -64,11 +64,14 @@ export function AthleteDetailPage() {
           <section className="card p-6"><h2 className="font-semibold text-pine-900">Contacto rápido</h2><p className="mt-4 flex items-center gap-3 text-sm text-slate-600"><Phone size={18} className="text-pine-600" /> {athlete.guardian.phone}</p><p className="mt-3 flex items-center gap-3 text-sm text-slate-600"><MapPin size={18} className="text-pine-600" /> {athlete.municipality}</p></section>
         </aside>}
       </div>
-      {can(PERMISSIONS.FOLLOW_UP_READ) && <section className="mt-6"><h2 className="font-display text-3xl text-pine-900">Expediente social</h2><div className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <ModuleLink to={`/deportistas/${athlete.id}/caracterizacion`} icon={<Home/>} title="Caracterización" status={workspace?.socioeconomicAssessment ? 'Realizada' : 'Pendiente'} />
+      {(can(PERMISSIONS.FOLLOW_UP_READ) || can(PERMISSIONS.SCREENING_WRITE)) && <section className="mt-6"><h2 className="font-display text-3xl text-pine-900">Expediente social</h2><div className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        {can(PERMISSIONS.FOLLOW_UP_READ) && <><ModuleLink to={`/deportistas/${athlete.id}/caracterizacion`} icon={<Home/>} title="Caracterización" status={workspace?.socioeconomicAssessment ? 'Realizada' : 'Pendiente'} />
         <ModuleLink to={`/deportistas/${athlete.id}/trabajo-social`} icon={<Activity/>} title="Alertas y seguimientos" status={`${workspace?.alerts.filter((item) => item.status === 'PENDING').length ?? 0} alertas · ${workspace?.followUps.filter((item) => item.status !== 'CLOSED').length ?? 0} abiertos`} />
         <ModuleLink to={`/deportistas/${athlete.id}/familiograma`} icon={<UsersRound/>} title="Familiograma" status={workspace?.genogram ? 'Guardado' : 'Generar'} />
-        <ModuleLink to={`/deportistas/${athlete.id}/ecomapa`} icon={<Network/>} title="Ecomapa" status={workspace?.ecomap ? 'Guardado' : 'Generar'} />
+        <ModuleLink to={`/deportistas/${athlete.id}/ecomapa`} icon={<Network/>} title="Ecomapa" status={workspace?.ecomap ? 'Guardado' : 'Generar'} /></>}
+        {can(PERMISSIONS.SCREENING_WRITE) && (screeningAgeGroup(athlete.age)
+          ? <ModuleLink to={`/brigadas/nueva?athleteId=${athlete.id}`} icon={<ShieldAlert/>} title="Tamizaje por edad" status={`${screeningAgeGroup(athlete.age)} · Preparar brigada`} />
+          : <ModuleCard icon={<ShieldAlert/>} title="Tamizaje por edad" status={`No disponible para ${athlete.age} años`} />)}
       </div></section>}
     </div>
   );
@@ -79,3 +82,4 @@ function InfoSection({ title, icon, children }: { title: string; icon: React.Rea
 }
 function Item({ label, value }: { label: string; value: string }) { return <div><p className="text-xs font-semibold uppercase tracking-wide text-slate-400">{label}</p><p className="mt-1 text-sm font-medium text-slate-700">{value}</p></div>; }
 function ModuleLink({ to, icon, title, status }: { to: string; icon: React.ReactNode; title: string; status: string }) { return <Link to={to} className="card flex items-center gap-4 p-5 transition hover:-translate-y-0.5 hover:shadow-lg"><div className="grid h-11 w-11 place-items-center rounded-xl bg-pine-50 text-pine-700">{icon}</div><div><p className="font-semibold text-pine-900">{title}</p><p className="mt-1 text-xs text-slate-500">{status}</p></div></Link>; }
+function ModuleCard({ icon, title, status }: { icon: React.ReactNode; title: string; status: string }) { return <div className="card flex items-center gap-4 p-5 opacity-70"><div className="grid h-11 w-11 place-items-center rounded-xl bg-slate-100 text-slate-500">{icon}</div><div><p className="font-semibold text-slate-700">{title}</p><p className="mt-1 text-xs text-slate-500">{status}</p></div></div>; }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { matchesConfigurableRule, validateScreeningResponses } from './index';
+import { instrumentMatchesAge, matchesConfigurableRule, screeningAgeGroup, validateScreeningResponses } from './index';
 import { PERMISSIONS, ROLES } from './index';
 
 describe('shared access vocabulary', () => {
@@ -25,6 +25,21 @@ describe('screening response validation', () => {
 
   it('accepts partial valid answers while a screening remains in progress', () => {
     expect(validateScreeningResponses(questions, { q1: 'Sí' }, false)).toEqual([]);
+  });
+});
+
+describe('age-specific screening instruments', () => {
+  it('maps every supported age to the correct instrument range', () => {
+    expect([6, 9, 10, 13, 14, 17].map(screeningAgeGroup)).toEqual([
+      '6 a 9 años', '6 a 9 años', '10 a 13 años', '10 a 13 años', '14 a 17 años', '14 a 17 años',
+    ]);
+    expect(screeningAgeGroup(5)).toBeNull();
+    expect(screeningAgeGroup(18)).toBeNull();
+  });
+
+  it('matches only the instrument assigned to the athlete age', () => {
+    expect(instrumentMatchesAge({ ageGroup: '10 a 13 años' }, 12)).toBe(true);
+    expect(instrumentMatchesAge({ ageGroup: '14 a 17 años' }, 12)).toBe(false);
   });
 });
 

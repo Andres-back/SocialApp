@@ -1,7 +1,7 @@
 import { ArrowLeft, Save, Search } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
-import type { AthleteRecord, CampaignStatus, CatalogItem, ScreeningCampaignData, ScreeningCampaignInput, ScreeningInstrumentData, SportsCatalogs } from '@socialapp/shared';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { instrumentMatchesAge, type AthleteRecord, type CampaignStatus, type CatalogItem, type ScreeningCampaignData, type ScreeningCampaignInput, type ScreeningInstrumentData, type SportsCatalogs } from '@socialapp/shared';
 import { useAuth } from '../features/auth/useAuth';
 import { loadAthletes, loadCatalogs } from '../features/athletes/athlete-repository';
 import { loadCampaigns, loadInstruments, saveCampaignOffline } from '../features/work/work-repository';
@@ -15,6 +15,8 @@ function includeCurrent(items: CatalogItem[], id?: string | null, name?: string 
 
 export function CampaignFormPage() {
   const { id } = useParams();
+  const [searchParams] = useSearchParams();
+  const requestedAthleteId = searchParams.get('athleteId');
   const { user } = useAuth();
   const navigate = useNavigate();
   const [athletes, setAthletes] = useState<AthleteRecord[]>([]);
@@ -26,6 +28,7 @@ export function CampaignFormPage() {
   const [values, setValues] = useState(initialValues);
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
+  const [suggestion, setSuggestion] = useState('');
 
   useEffect(() => {
     Promise.all([loadAthletes(), loadCatalogs(), loadInstruments(), id ? loadCampaigns() : Promise.resolve([])]).then(([people, cats, forms, campaigns]) => {
@@ -37,10 +40,16 @@ export function CampaignFormPage() {
         setValues({ name: current.name, date: current.date, place: current.place, programId: current.sportsProgramId ?? '', sportId: current.sportId ?? '', instrumentId: current.instrumentId, status: current.status });
       } else {
         setCatalogs(cats);
-        if (forms[0]) setValues((state) => ({ ...state, instrumentId: forms[0]!.id }));
+        const requested = people.find((athlete) => athlete.id === requestedAthleteId);
+        const matchedInstrument = requested ? forms.find((instrument) => instrumentMatchesAge(instrument, requested.age)) : undefined;
+        if (requested) {
+          setSelected([requested.id]);
+          setValues((state) => ({ ...state, name: `Tamizaje por edad - ${requested.firstNames} ${requested.lastNames}`, place: requested.municipality, programId: requested.sportsProgramId, sportId: requested.sportId, instrumentId: matchedInstrument?.id ?? forms[0]?.id ?? '' }));
+          setSuggestion(matchedInstrument ? `${matchedInstrument.name} seleccionado automáticamente para ${requested.age} años.` : `No hay un instrumento activo configurado para ${requested.age} años.`);
+        } else if (forms[0]) setValues((state) => ({ ...state, instrumentId: forms[0]!.id }));
       }
     });
-  }, [id]);
+  }, [id, requestedAthleteId]);
 
   const filtered = useMemo(() => {
     const term = search.trim().toLocaleLowerCase('es');
@@ -52,6 +61,9 @@ export function CampaignFormPage() {
     const instrument = instruments.find((item) => item.id === values.instrumentId);
     if (!values.name.trim() || !values.place.trim() || !instrument) return setError('Completa el nombre, lugar e instrumento de la brigada.');
     if (selected.length === 0) return setError('Selecciona al menos un deportista.');
+    const incompatible = instrument.ageGroup && ['6 a 9 años', '10 a 13 años', '14 a 17 años'].includes(instrument.ageGroup)
+      ? athletes.filter((athlete) => selected.includes(athlete.id) && !instrumentMatchesAge(instrument, athlete.age)) : [];
+    if (incompatible.length > 0) return setError(`El instrumento ${instrument.ageGroup} no corresponde a la edad de: ${incompatible.map((athlete) => `${athlete.firstNames} ${athlete.lastNames} (${athlete.age})`).join(', ')}.`);
     setSaving(true);
     try {
       const campaignId = existing?.id ?? crypto.randomUUID();
@@ -74,13 +86,14 @@ export function CampaignFormPage() {
     <Link to={existing ? `/brigadas/${existing.id}` : '/brigadas'} className="inline-flex items-center gap-2 text-sm font-semibold text-pine-700"><ArrowLeft size={17}/> Volver</Link>
     <h1 className="mt-5 font-display text-4xl text-pine-900">{existing ? 'Editar brigada' : 'Nueva brigada'}</h1>
     <p className="mt-2 text-sm text-slate-500">Define la jornada y deja instrumentos y población disponibles para trabajar sin conexión.</p>
+    {suggestion && <div className="mt-5 rounded-xl bg-blue-50 px-4 py-3 text-sm text-blue-800">{suggestion}</div>}
     {error && <div role="alert" className="mt-5 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
     <section className="card mt-6 grid gap-5 p-5 md:grid-cols-2 md:p-7">
       <Field label="Nombre de la brigada"><input className="field" value={values.name} onChange={(event) => setValues({ ...values, name: event.target.value })}/></Field>
       <Field label="Fecha"><input type="date" className="field" value={values.date} onChange={(event) => setValues({ ...values, date: event.target.value })}/></Field>
       <Field label="Lugar"><input className="field" value={values.place} onChange={(event) => setValues({ ...values, place: event.target.value })}/></Field>
       <Field label="Estado inicial"><select className="field" value={values.status} onChange={(event) => setValues({ ...values, status: event.target.value as CampaignStatus })}><option value="PLANNED">Planeada</option><option value="ACTIVE">En curso</option>{existing?.status === 'COMPLETED' && <option value="COMPLETED">Finalizada</option>}</select></Field>
-      <Field label="Instrumento"><select className="field" value={values.instrumentId} onChange={(event) => setValues({ ...values, instrumentId: event.target.value })}>{instruments.map((item) => <option key={item.id} value={item.id}>{item.name} v{item.version}</option>)}</select></Field>
+      <Field label="Instrumento"><select className="field" value={values.instrumentId} onChange={(event) => setValues({ ...values, instrumentId: event.target.value })}>{instruments.map((item) => <option key={item.id} value={item.id}>{item.name} v{item.version}{item.ageGroup ? ` · ${item.ageGroup}` : ''}</option>)}</select></Field>
       <Field label="Programa"><select className="field" value={values.programId} onChange={(event) => setValues({ ...values, programId: event.target.value })}><option value="">Todos</option>{catalogs?.programs.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></Field>
       <Field label="Deporte"><select className="field" value={values.sportId} onChange={(event) => setValues({ ...values, sportId: event.target.value })}><option value="">Todos</option>{catalogs?.sports.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></Field>
       <Field label="Profesional responsable"><input className="field bg-slate-50" value={existing?.professionalName ?? user?.displayName ?? ''} readOnly/></Field>

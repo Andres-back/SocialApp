@@ -24,6 +24,7 @@ const ScreeningResultPage = lazy(() => import('../pages/ScreeningResultPage').th
 const ReportsPage = lazy(() => import('../pages/ReportsPage').then((module) => ({ default: module.ReportsPage })));
 const AdminPage = lazy(() => import('../pages/AdminPage').then((module) => ({ default: module.AdminPage })));
 const CatalogsPage = lazy(() => import('../pages/CatalogsPage').then((module) => ({ default: module.CatalogsPage })));
+const InstrumentsPage = lazy(() => import('../pages/InstrumentsPage').then((module) => ({ default: module.InstrumentsPage })));
 const IndividualReportPage = lazy(() => import('../pages/IndividualReportPage').then((module) => ({ default: module.IndividualReportPage })));
 
 function ProtectedApp() {
@@ -54,6 +55,7 @@ function ProtectedApp() {
         <Route path="/reportes" element={<Gate can={can} permission={PERMISSIONS.DASHBOARD_AGGREGATE_READ}><ReportsPage /></Gate>} />
         <Route path="/reportes/deportistas/:id" element={<Gate can={can} permission={PERMISSIONS.SOCIAL_RECORD_READ}><IndividualReportPage /></Gate>} />
         <Route path="/catalogos" element={<Gate can={can} permission={PERMISSIONS.CATALOG_MANAGE}><CatalogsPage /></Gate>} />
+        <Route path="/instrumentos" element={<Gate can={can} permission={PERMISSIONS.SCREENING_WRITE}><InstrumentsPage /></Gate>} />
         <Route path="/administracion" element={<Gate can={can} permission={PERMISSIONS.ADMIN_USERS}><AdminPage /></Gate>} />
         <Route path="*" element={<NotFoundPage />} />
       </Routes></Suspense>

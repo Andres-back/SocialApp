@@ -75,6 +75,22 @@ export class ManagementController {
     return this.management.saveInstrument(request.user.id, body);
   }
 
+  @Get('instruments/manage')
+  @RequirePermissions(PERMISSIONS.SCREENING_WRITE)
+  instruments() { return this.management.instrumentOverview(); }
+
+  @Post('instruments')
+  @RequirePermissions(PERMISSIONS.SCREENING_WRITE)
+  saveOperationalInstrument(@Body() body: Record<string, unknown>, @Req() request: Request & { user: RequestUser }) {
+    return this.management.saveInstrument(request.user.id, body);
+  }
+
+  @Patch('instruments/:id')
+  @RequirePermissions(PERMISSIONS.SCREENING_WRITE)
+  updateInstrumentStatus(@Param('id') id: string, @Body() body: { active: boolean }, @Req() request: Request & { user: RequestUser }) {
+    return this.management.updateInstrumentStatus(request.user.id, id, body.active);
+  }
+
   @Post('admin/users')
   @RequirePermissions(PERMISSIONS.ADMIN_USERS)
   user(@Body() body: { email: string; displayName: string; password: string; roles: string[] }, @Req() request: Request & { user: RequestUser }) {

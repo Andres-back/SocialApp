@@ -4,6 +4,28 @@ import { PERMISSIONS, ROLES } from '@socialapp/shared';
 
 const prisma = new PrismaClient();
 
+type SeedQuestion = { dimension: string; prompt: string; type: string; options: string[]; required?: boolean };
+
+async function ensureScreeningInstrument(userId: string, name: string, ageGroup: string, questions: SeedQuestion[]) {
+  let instrument = await prisma.screeningInstrument.findFirst({ where: { name, version: 1, deletedAt: null } });
+  instrument ??= await prisma.screeningInstrument.create({ data: { name, version: 1, ageGroup, createdBy: userId, updatedBy: userId } });
+  await prisma.screeningInstrument.update({ where: { id: instrument.id }, data: { ageGroup, active: true, updatedBy: userId } });
+  if (await prisma.screeningQuestion.count({ where: { instrumentId: instrument.id, deletedAt: null } }) === 0) {
+    await prisma.screeningQuestion.createMany({ data: questions.map((question, index) => ({
+      instrumentId: instrument.id,
+      dimension: question.dimension,
+      prompt: question.prompt,
+      type: question.type,
+      options: question.options,
+      required: question.required !== false,
+      position: index + 1,
+      createdBy: userId,
+      updatedBy: userId,
+    })) });
+  }
+  return instrument;
+}
+
 const permissionNames: Record<string, string> = {
   [PERMISSIONS.ATHLETE_READ]: 'Consultar deportistas', [PERMISSIONS.ATHLETE_WRITE]: 'Gestionar deportistas',
   [PERMISSIONS.SOCIAL_RECORD_READ]: 'Consultar información social', [PERMISSIONS.SOCIAL_RECORD_WRITE]: 'Gestionar información social',
@@ -136,6 +158,46 @@ async function main() {
       { instrumentId: instrument.id, dimension: 'Bienestar general', prompt: '¿Cómo valora su bienestar general esta semana?', type: 'SCALE', options: ['1', '2', '3', '4', '5'], position: 5, createdBy: user.id, updatedBy: user.id },
     ] });
   }
+
+  const frequencyOptions = ['Nunca', 'A veces', 'Casi siempre', 'Siempre'];
+  await ensureScreeningInstrument(user.id, 'Tamizaje de 6 a 9 años', '6 a 9 años', [
+    { dimension: 'Participación deportiva', prompt: '¿Te gusta venir a entrenar?', type: 'YES_NO', options: ['Sí', 'No'] },
+    { dimension: 'Pertenencia al equipo', prompt: '¿Te sientes parte de tu equipo?', type: 'YES_NO', options: ['Sí', 'No'] },
+    { dimension: 'Convivencia', prompt: '¿Tus compañeros te tratan bien?', type: 'YES_NO', options: ['Sí', 'No'] },
+    { dimension: 'Convivencia', prompt: '¿Algún compañero se burla de ti o te hace sentir mal?', type: 'YES_NO', options: ['Sí', 'No'] },
+    { dimension: 'Relación con el entrenador', prompt: '¿Tu entrenador te trata con respeto?', type: 'YES_NO', options: ['Sí', 'No'] },
+    { dimension: 'Relación con el entrenador', prompt: 'Cuando te equivocas, ¿tu entrenador te ayuda a mejorar?', type: 'YES_NO', options: ['Sí', 'No'] },
+    { dimension: 'Apoyo familiar', prompt: '¿Tu familia te apoya para practicar este deporte?', type: 'YES_NO', options: ['Sí', 'No'] },
+    { dimension: 'Redes de apoyo', prompt: '¿Tienes un adulto con quien puedas hablar si tienes un problema?', type: 'YES_NO', options: ['Sí', 'No'] },
+    { dimension: 'Seguridad', prompt: '¿Te sientes seguro/a cuando estás entrenando?', type: 'YES_NO', options: ['Sí', 'No'] },
+    { dimension: 'Bienestar', prompt: '¿Hay algo del entrenamiento que te haga sentir triste, asustado/a o incómodo/a?', type: 'SINGLE_CHOICE', options: ['Sí', 'No', 'Prefiero no responder'] },
+  ]);
+  await ensureScreeningInstrument(user.id, 'Tamizaje de 10 a 13 años', '10 a 13 años', [
+    { dimension: 'Pertenencia al equipo', prompt: 'Me siento parte de mi equipo.', type: 'SCALE', options: frequencyOptions },
+    { dimension: 'Convivencia', prompt: 'Me siento respetado/a por mis compañeros.', type: 'SCALE', options: frequencyOptions },
+    { dimension: 'Redes de apoyo', prompt: 'Puedo contar con algún compañero cuando necesito ayuda.', type: 'SCALE', options: frequencyOptions },
+    { dimension: 'Convivencia', prompt: 'He recibido burlas, rechazo o exclusión dentro del equipo.', type: 'SCALE', options: frequencyOptions },
+    { dimension: 'Relación con el entrenador', prompt: 'Mi entrenador me trata con respeto.', type: 'SCALE', options: frequencyOptions },
+    { dimension: 'Relación con el entrenador', prompt: 'Puedo hablar con mi entrenador cuando tengo una dificultad.', type: 'SCALE', options: frequencyOptions },
+    { dimension: 'Regulación emocional', prompt: 'Cuando pierdo o cometo un error, logro tranquilizarme e intentarlo nuevamente.', type: 'SCALE', options: frequencyOptions },
+    { dimension: 'Presión deportiva', prompt: 'Siento demasiada presión para ganar o hacerlo bien.', type: 'SCALE', options: frequencyOptions },
+    { dimension: 'Apoyo familiar', prompt: 'Mi familia me apoya para continuar practicando deporte.', type: 'SCALE', options: frequencyOptions },
+    { dimension: 'Seguridad', prompt: 'Me siento seguro/a durante los entrenamientos y competencias.', type: 'SCALE', options: frequencyOptions },
+  ]);
+  await ensureScreeningInstrument(user.id, 'Tamizaje de 14 a 17 años', '14 a 17 años', [
+    { dimension: 'Pertenencia al equipo', prompt: 'Me siento bien siendo parte de este equipo.', type: 'SCALE', options: frequencyOptions },
+    { dimension: 'Convivencia', prompt: 'Existe respeto entre mis compañeros.', type: 'SCALE', options: frequencyOptions },
+    { dimension: 'Comunicación', prompt: 'Puedo expresar mis opiniones o dificultades dentro del equipo.', type: 'SCALE', options: frequencyOptions },
+    { dimension: 'Convivencia', prompt: 'Dentro del equipo se presentan burlas, discriminación o exclusión.', type: 'SCALE', options: frequencyOptions },
+    { dimension: 'Relación con el entrenador', prompt: 'La comunicación de mi entrenador conmigo es respetuosa.', type: 'SCALE', options: frequencyOptions },
+    { dimension: 'Regulación emocional', prompt: 'Puedo manejar la frustración cuando pierdo o mi rendimiento no es el esperado.', type: 'SCALE', options: frequencyOptions },
+    { dimension: 'Presión deportiva', prompt: 'Siento demasiada presión por obtener buenos resultados deportivos.', type: 'SCALE', options: frequencyOptions },
+    { dimension: 'Apoyo familiar', prompt: 'Mi familia me brinda apoyo en mi proceso deportivo.', type: 'SCALE', options: frequencyOptions },
+    { dimension: 'Equilibrio personal', prompt: 'Puedo equilibrar adecuadamente deporte, estudio y vida personal.', type: 'SCALE', options: frequencyOptions },
+    { dimension: 'Seguridad', prompt: 'Me siento seguro/a durante entrenamientos, competencias y demás actividades deportivas.', type: 'SCALE', options: frequencyOptions },
+    { dimension: 'Atención privada', prompt: '¿Deseas hablar de manera privada con el profesional de Trabajo Social sobre alguna situación?', type: 'SINGLE_CHOICE', options: ['Sí', 'No', 'Tal vez'], required: false },
+  ]);
+  await prisma.screeningInstrument.update({ where: { id: instrument.id }, data: { active: false, updatedBy: user.id } });
 
   const screeningQuestions = await prisma.screeningQuestion.findMany({
     where: { instrumentId: instrument.id, deletedAt: null },

@@ -1,6 +1,6 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import type { AdminUserData, AuditLogData, ConfigurableRuleData, DashboardData, ManageableCatalogItem, ManageableSportsCatalogs, ReportPopulationData, RoleCode } from '@socialapp/shared';
+import type { AdminUserData, AuditLogData, ConfigurableRuleData, DashboardData, ManageableCatalogItem, ManageableSportsCatalogs, ReportPopulationData, RoleCode, ScreeningInstrumentData } from '@socialapp/shared';
 import * as argon2 from 'argon2';
 import { AuditService } from '../audit/audit.service';
 import { AthletesService } from '../athletes/athletes.service';
@@ -169,18 +169,37 @@ export class ManagementService {
     return item;
   }
   async saveInstrument(userId: string, body: Record<string, unknown>) {
-    const id = String(body.id || crypto.randomUUID());
+    const requestedId = String(body.id || crypto.randomUUID());
     const name = String(body.name || '').trim();
     const questions = Array.isArray(body.questions) ? body.questions as Record<string, unknown>[] : [];
     if (!name || questions.length === 0) throw new BadRequestException('El instrumento necesita nombre y al menos una pregunta.');
+    if (questions.some((question) => !String(question.prompt || '').trim())) throw new BadRequestException('Todas las preguntas deben tener un enunciado.');
+    const existing = await this.prisma.screeningInstrument.findUnique({ where: { id: requestedId } });
+    const latest = await this.prisma.screeningInstrument.findFirst({ where: { name, deletedAt: null }, orderBy: { version: 'desc' } });
+    const id = existing ? crypto.randomUUID() : requestedId;
+    const version = existing ? Math.max(existing.version + 1, (latest?.version ?? 0) + 1) : Number(body.version || 1);
     const item = await this.prisma.$transaction(async (tx) => {
-      const instrument = await tx.screeningInstrument.upsert({ where: { id }, update: { name, ageGroup: body.ageGroup ? String(body.ageGroup) : null, active: body.active !== false, updatedBy: userId }, create: { id, name, version: Number(body.version || 1), ageGroup: body.ageGroup ? String(body.ageGroup) : null, active: body.active !== false, createdBy: userId, updatedBy: userId } });
-      await tx.screeningQuestion.updateMany({ where: { instrumentId: id }, data: { deletedAt: new Date(), updatedBy: userId } });
-      for (const [position, question] of questions.entries()) await tx.screeningQuestion.create({ data: { id: String(question.id || crypto.randomUUID()), instrumentId: id, dimension: String(question.dimension || 'General'), prompt: String(question.prompt || ''), type: String(question.type || 'YES_NO'), options: (question.options ?? []) as Prisma.InputJsonValue, required: question.required !== false, position, createdBy: userId, updatedBy: userId } });
+      if (existing) await tx.screeningInstrument.update({ where: { id: existing.id }, data: { active: false, updatedBy: userId } });
+      const instrument = await tx.screeningInstrument.create({ data: { id, name, version, ageGroup: body.ageGroup ? String(body.ageGroup) : null, active: body.active !== false, createdBy: userId, updatedBy: userId } });
+      for (const [position, question] of questions.entries()) await tx.screeningQuestion.create({ data: { id: crypto.randomUUID(), instrumentId: id, dimension: String(question.dimension || 'General').trim() || 'General', prompt: String(question.prompt).trim(), type: String(question.type || 'YES_NO'), options: (question.options ?? []) as Prisma.InputJsonValue, required: question.required !== false, position: position + 1, createdBy: userId, updatedBy: userId } });
       return instrument;
     });
-    await this.audit.record({ actorUserId: userId, action: 'instrument.save', resourceType: 'ScreeningInstrument', resourceId: item.id });
+    await this.audit.record({ actorUserId: userId, action: existing ? 'instrument.version' : 'instrument.create', resourceType: 'ScreeningInstrument', resourceId: item.id, metadata: existing ? { previousId: existing.id, version } : { version } });
     return item;
+  }
+  async instrumentOverview(): Promise<ScreeningInstrumentData[]> {
+    const rows = await this.prisma.screeningInstrument.findMany({ where: { deletedAt: null }, include: { questions: { where: { deletedAt: null }, orderBy: { position: 'asc' } } }, orderBy: [{ name: 'asc' }, { version: 'desc' }] });
+    return rows.map((item) => ({ id: item.id, name: item.name, version: item.version, ageGroup: item.ageGroup, active: item.active, questions: item.questions.map((question) => ({ id: question.id, dimension: question.dimension, prompt: question.prompt, type: question.type as any, options: question.options as string[], required: question.required, position: question.position })) }));
+  }
+  async updateInstrumentStatus(userId: string, id: string, active: boolean) {
+    const item = await this.prisma.screeningInstrument.findFirst({ where: { id, deletedAt: null } });
+    if (!item) throw new BadRequestException('El instrumento ya no está disponible.');
+    const saved = await this.prisma.$transaction(async (tx) => {
+      if (active) await tx.screeningInstrument.updateMany({ where: { name: item.name, id: { not: id }, deletedAt: null }, data: { active: false, updatedBy: userId } });
+      return tx.screeningInstrument.update({ where: { id }, data: { active, updatedBy: userId } });
+    });
+    await this.audit.record({ actorUserId: userId, action: active ? 'instrument.activate' : 'instrument.retire', resourceType: 'ScreeningInstrument', resourceId: id });
+    return saved;
   }
   async createUser(userId: string, body: { email: string; displayName: string; password: string; roles: string[] }) {
     if (!body.email || !body.displayName || body.password.length < 10 || body.roles.length === 0) throw new BadRequestException('Completa los datos. La contraseña debe tener al menos 10 caracteres.');

@@ -1,4 +1,4 @@
-import type { AlertData, AthleteInput, AthleteRecord, AthleteWorkspace, AuthSession, DashboardData, FollowUpCaseData, FollowUpCaseInput, FollowUpEntryData, FollowUpEntryInput, ManageableSportsCatalogs, NetworkDiagramData, ProfessionalObservationData, ReportPopulationData, ScreeningCampaignData, ScreeningCampaignInput, ScreeningInstrumentData, SocialRecordData, SocialRecordInput, SocioeconomicAssessmentData, SocioeconomicAssessmentInput, SportsCatalogs, SyncMutation, SyncPushResponse } from '@socialapp/shared';
+import type { AlertData, AthleteInput, AthleteRecord, AthleteWorkspace, AuthSession, DashboardData, FollowUpCaseData, FollowUpCaseInput, FollowUpEntryData, FollowUpEntryInput, ManageableSportsCatalogs, NetworkDiagramData, ProfessionalObservationData, ReportPopulationData, ScreeningCampaignData, ScreeningCampaignInput, ScreeningInstrumentData, ScreeningInstrumentInput, SocialRecordData, SocialRecordInput, SocioeconomicAssessmentData, SocioeconomicAssessmentInput, SportsCatalogs, SyncMutation, SyncPushResponse } from '@socialapp/shared';
 
 const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:3000/api/v1';
 let accessToken: string | null = sessionStorage.getItem('socialapp.accessToken');
@@ -101,6 +101,9 @@ export const api = {
     return request<NetworkDiagramData>(`/athletes/${input.athleteId}/${type}`, { method: 'PUT', body: JSON.stringify(input) });
   },
   listInstruments() { return request<ScreeningInstrumentData[]>('/campaigns/instruments'); },
+  manageableInstruments() { return request<ScreeningInstrumentData[]>('/instruments/manage'); },
+  saveOperationalInstrument(input: ScreeningInstrumentInput) { return request<ScreeningInstrumentData>('/instruments', { method: 'POST', body: JSON.stringify(input) }); },
+  updateInstrumentStatus(id: string, active: boolean) { return request<ScreeningInstrumentData>(`/instruments/${id}`, { method: 'PATCH', body: JSON.stringify({ active }) }); },
   listCampaigns() { return request<ScreeningCampaignData[]>('/campaigns'); },
   getCampaign(id: string) { return request<ScreeningCampaignData>(`/campaigns/${id}`); },
   saveCampaign(input: ScreeningCampaignInput) { return request<ScreeningCampaignData>('/campaigns', { method: 'POST', body: JSON.stringify(input) }); },

@@ -359,6 +359,26 @@ export interface ScreeningInstrumentData {
   questions: ScreeningQuestionData[];
   active: boolean;
 }
+export interface ScreeningInstrumentInput {
+  id?: string;
+  name: string;
+  ageGroup: string;
+  active: boolean;
+  questions: Array<Omit<ScreeningQuestionData, 'position'> & { position?: number }>;
+}
+
+export type ScreeningAgeGroup = '6 a 9 años' | '10 a 13 años' | '14 a 17 años';
+
+export function screeningAgeGroup(age: number): ScreeningAgeGroup | null {
+  if (age >= 6 && age <= 9) return '6 a 9 años';
+  if (age >= 10 && age <= 13) return '10 a 13 años';
+  if (age >= 14 && age <= 17) return '14 a 17 años';
+  return null;
+}
+
+export function instrumentMatchesAge(instrument: Pick<ScreeningInstrumentData, 'ageGroup'>, age: number): boolean {
+  return screeningAgeGroup(age) === instrument.ageGroup;
+}
 export interface CampaignParticipantData {
   id: string;
   athleteId: string;
