@@ -47,6 +47,22 @@ export class ManagementController {
     return this.management.createCatalog(request.user.id, kind, body.name);
   }
 
+  @Get('catalogs/manage')
+  @RequirePermissions(PERMISSIONS.CATALOG_MANAGE)
+  catalogOverview() { return this.management.catalogOverview(); }
+
+  @Post('catalogs/:kind')
+  @RequirePermissions(PERMISSIONS.CATALOG_MANAGE)
+  createOperationalCatalog(@Param('kind') kind: string, @Body() body: { name: string }, @Req() request: Request & { user: RequestUser }) {
+    return this.management.createCatalog(request.user.id, kind, body.name);
+  }
+
+  @Patch('catalogs/:kind/:id')
+  @RequirePermissions(PERMISSIONS.CATALOG_MANAGE)
+  updateOperationalCatalog(@Param('kind') kind: string, @Param('id') id: string, @Body() body: { name?: string; active?: boolean }, @Req() request: Request & { user: RequestUser }) {
+    return this.management.updateCatalog(request.user.id, kind, id, body);
+  }
+
   @Post('admin/rules')
   @RequirePermissions(PERMISSIONS.ADMIN_CATALOGS)
   rule(@Body() body: Record<string, unknown>, @Req() request: Request & { user: RequestUser }) {

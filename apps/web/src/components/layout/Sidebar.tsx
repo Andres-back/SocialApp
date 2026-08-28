@@ -1,4 +1,4 @@
-import { ClipboardEdit, FileText, HeartHandshake, Home, LogOut, Settings, ShieldCheck, UsersRound, Wifi } from 'lucide-react';
+import { ClipboardEdit, FileText, HeartHandshake, Home, ListPlus, LogOut, Settings, ShieldCheck, UsersRound, Wifi } from 'lucide-react';
 import { NavLink } from 'react-router-dom';
 import { PERMISSIONS } from '@socialapp/shared';
 import { useAuth } from '../../features/auth/useAuth';
@@ -9,6 +9,7 @@ const items = [
   { to: '/trabajo-social', label: 'Trabajo Social', icon: ClipboardEdit, permission: PERMISSIONS.SOCIAL_RECORD_READ },
   { to: '/brigadas', label: 'Brigadas', icon: ShieldCheck, permission: PERMISSIONS.SCREENING_READ },
   { to: '/reportes', label: 'Reportes', icon: FileText, permission: PERMISSIONS.DASHBOARD_AGGREGATE_READ },
+  { to: '/catalogos', label: 'Catálogos', icon: ListPlus, permission: PERMISSIONS.CATALOG_MANAGE },
   { to: '/sincronizacion', label: 'Sincronización', icon: Wifi, permission: PERMISSIONS.SYNC_EXECUTE },
 ];
 

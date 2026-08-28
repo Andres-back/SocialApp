@@ -1,12 +1,17 @@
 import { ArrowLeft, Save, Search } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import type { AthleteRecord, CampaignStatus, ScreeningCampaignData, ScreeningCampaignInput, ScreeningInstrumentData, SportsCatalogs } from '@socialapp/shared';
+import type { AthleteRecord, CampaignStatus, CatalogItem, ScreeningCampaignData, ScreeningCampaignInput, ScreeningInstrumentData, SportsCatalogs } from '@socialapp/shared';
 import { useAuth } from '../features/auth/useAuth';
 import { loadAthletes, loadCatalogs } from '../features/athletes/athlete-repository';
 import { loadCampaigns, loadInstruments, saveCampaignOffline } from '../features/work/work-repository';
 
 const initialValues = { name: '', date: new Date().toISOString().slice(0, 10), place: '', programId: '', sportId: '', instrumentId: '', status: 'ACTIVE' as CampaignStatus };
+
+function includeCurrent(items: CatalogItem[], id?: string | null, name?: string | null) {
+  if (!id || !name || items.some((item) => item.id === id)) return items;
+  return [...items, { id, name }].sort((left, right) => left.name.localeCompare(right.name, 'es'));
+}
 
 export function CampaignFormPage() {
   const { id } = useParams();
@@ -24,12 +29,16 @@ export function CampaignFormPage() {
 
   useEffect(() => {
     Promise.all([loadAthletes(), loadCatalogs(), loadInstruments(), id ? loadCampaigns() : Promise.resolve([])]).then(([people, cats, forms, campaigns]) => {
-      setAthletes(people); setCatalogs(cats); setInstruments(forms);
+      setAthletes(people); setInstruments(forms);
       const current = campaigns.find((campaign) => campaign.id === id);
       if (current) {
+        setCatalogs({ ...cats, programs: includeCurrent(cats.programs, current.sportsProgramId, current.sportsProgramName), sports: includeCurrent(cats.sports, current.sportId, current.sportName) });
         setExisting(current); setSelected(current.participants.map((participant) => participant.athleteId));
         setValues({ name: current.name, date: current.date, place: current.place, programId: current.sportsProgramId ?? '', sportId: current.sportId ?? '', instrumentId: current.instrumentId, status: current.status });
-      } else if (forms[0]) setValues((state) => ({ ...state, instrumentId: forms[0]!.id }));
+      } else {
+        setCatalogs(cats);
+        if (forms[0]) setValues((state) => ({ ...state, instrumentId: forms[0]!.id }));
+      }
     });
   }, [id]);
 

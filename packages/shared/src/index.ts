@@ -25,6 +25,7 @@ export const PERMISSIONS = {
   DASHBOARD_AGGREGATE_READ: 'dashboard:aggregate:read',
   ADMIN_USERS: 'admin:users',
   ADMIN_CATALOGS: 'admin:catalogs',
+  CATALOG_MANAGE: 'catalog:manage',
   AUDIT_READ: 'audit:read',
   SYNC_EXECUTE: 'sync:execute',
 } as const;
@@ -88,6 +89,18 @@ export interface SportsCatalogs {
   sports: CatalogItem[];
   categories: CatalogItem[];
   coaches: CatalogItem[];
+}
+
+export interface ManageableCatalogItem extends CatalogItem {
+  active: boolean;
+  usageCount: number;
+}
+
+export interface ManageableSportsCatalogs {
+  programs: ManageableCatalogItem[];
+  sports: ManageableCatalogItem[];
+  categories: ManageableCatalogItem[];
+  coaches: ManageableCatalogItem[];
 }
 
 export interface GuardianData {

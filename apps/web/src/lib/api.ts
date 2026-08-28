@@ -1,4 +1,4 @@
-import type { AlertData, AthleteInput, AthleteRecord, AthleteWorkspace, AuthSession, DashboardData, FollowUpCaseData, FollowUpCaseInput, FollowUpEntryData, FollowUpEntryInput, NetworkDiagramData, ProfessionalObservationData, ReportPopulationData, ScreeningCampaignData, ScreeningCampaignInput, ScreeningInstrumentData, SocialRecordData, SocialRecordInput, SocioeconomicAssessmentData, SocioeconomicAssessmentInput, SportsCatalogs, SyncMutation, SyncPushResponse } from '@socialapp/shared';
+import type { AlertData, AthleteInput, AthleteRecord, AthleteWorkspace, AuthSession, DashboardData, FollowUpCaseData, FollowUpCaseInput, FollowUpEntryData, FollowUpEntryInput, ManageableSportsCatalogs, NetworkDiagramData, ProfessionalObservationData, ReportPopulationData, ScreeningCampaignData, ScreeningCampaignInput, ScreeningInstrumentData, SocialRecordData, SocialRecordInput, SocioeconomicAssessmentData, SocioeconomicAssessmentInput, SportsCatalogs, SyncMutation, SyncPushResponse } from '@socialapp/shared';
 
 const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:3000/api/v1';
 let accessToken: string | null = sessionStorage.getItem('socialapp.accessToken');
@@ -116,6 +116,9 @@ export const api = {
   auditExport(type: string, athleteId?: string) { return request<{ success: boolean }>('/reports/export-audit', { method: 'POST', body: JSON.stringify({ type, athleteId }) }); },
   adminOverview() { return request<Record<string, unknown>>('/admin/overview'); },
   createCatalog(kind: string, name: string) { return request(`/admin/catalogs/${kind}`, { method: 'POST', body: JSON.stringify({ name }) }); },
+  manageableCatalogs() { return request<ManageableSportsCatalogs>('/catalogs/manage'); },
+  createOperationalCatalog(kind: string, name: string) { return request(`/catalogs/${kind}`, { method: 'POST', body: JSON.stringify({ name }) }); },
+  updateOperationalCatalog(kind: string, id: string, body: { name?: string; active?: boolean }) { return request(`/catalogs/${kind}/${id}`, { method: 'PATCH', body: JSON.stringify(body) }); },
   saveRule(body: Record<string, unknown>) { return request('/admin/rules', { method: 'POST', body: JSON.stringify(body) }); },
   saveInstrument(body: Record<string, unknown>) { return request('/admin/instruments', { method: 'POST', body: JSON.stringify(body) }); },
   createUser(body: Record<string, unknown>) { return request('/admin/users', { method: 'POST', body: JSON.stringify(body) }); },

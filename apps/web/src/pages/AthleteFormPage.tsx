@@ -4,7 +4,7 @@ import { ArrowLeft, Save, WifiOff } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { z } from 'zod';
-import type { AthleteInput, SportsCatalogs } from '@socialapp/shared';
+import type { AthleteInput, AthleteRecord, CatalogItem, SportsCatalogs } from '@socialapp/shared';
 import { loadAthlete, loadCatalogs, saveAthleteOffline } from '../features/athletes/athlete-repository';
 import { useConnection } from '../hooks/useConnection';
 
@@ -39,6 +39,20 @@ type FormValues = z.infer<typeof schema>;
 const inputClass = 'field mt-2';
 function FieldError({ message }: { message?: string }) { return message ? <span className="mt-1 block text-xs text-red-600">{message}</span> : null; }
 
+function includeCurrent(items: CatalogItem[], id: string | null | undefined, name: string | null | undefined) {
+  if (!id || !name || items.some((item) => item.id === id)) return items;
+  return [...items, { id, name }].sort((left, right) => left.name.localeCompare(right.name, 'es'));
+}
+
+function includeRetiredSelections(catalogs: SportsCatalogs, athlete: AthleteRecord): SportsCatalogs {
+  return {
+    programs: includeCurrent(catalogs.programs, athlete.sportsProgramId, athlete.sportsProgramName),
+    sports: includeCurrent(catalogs.sports, athlete.sportId, athlete.sportName),
+    categories: includeCurrent(catalogs.categories, athlete.categoryId, athlete.categoryName),
+    coaches: includeCurrent(catalogs.coaches, athlete.coachId, athlete.coachName),
+  };
+}
+
 export function AthleteFormPage() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -58,10 +72,21 @@ export function AthleteFormPage() {
   });
 
   useEffect(() => {
-    loadCatalogs().then(setCatalogs).catch((error) => setLoadError(error instanceof Error ? error.message : 'No fue posible cargar los catálogos.'));
-    if (id) {
-      loadAthlete(id).then((athlete) => {
-        if (!athlete) return setLoadError('No encontramos este deportista en el dispositivo.');
+    let cancelled = false;
+    const hydrate = async () => {
+      try {
+        const availableCatalogs = await loadCatalogs();
+        if (!id) {
+          if (!cancelled) setCatalogs(availableCatalogs);
+          return;
+        }
+        const athlete = await loadAthlete(id);
+        if (!athlete) {
+          if (!cancelled) setLoadError('No encontramos este deportista en el dispositivo.');
+          return;
+        }
+        if (cancelled) return;
+        setCatalogs(includeRetiredSelections(availableCatalogs, athlete));
         setRecordVersion(athlete.version);
         reset({
           internalCode: athlete.internalCode, documentType: athlete.documentType, documentNumber: athlete.documentNumber ?? '',
@@ -72,8 +97,12 @@ export function AthleteFormPage() {
           currentlyEnrolled: athlete.currentlyEnrolled, guardianName: athlete.guardian.name,
           guardianRelationship: athlete.guardian.relationship, guardianPhone: athlete.guardian.phone, guardianEmail: athlete.guardian.email ?? '',
         });
-      });
-    }
+      } catch (error) {
+        if (!cancelled) setLoadError(error instanceof Error ? error.message : 'No fue posible cargar los catálogos.');
+      }
+    };
+    void hydrate();
+    return () => { cancelled = true; };
   }, [id, reset]);
 
   async function submit(values: FormValues) {

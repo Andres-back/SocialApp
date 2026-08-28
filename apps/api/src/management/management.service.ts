@@ -1,6 +1,6 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import type { AdminUserData, AuditLogData, ConfigurableRuleData, DashboardData, ReportPopulationData, RoleCode } from '@socialapp/shared';
+import type { AdminUserData, AuditLogData, ConfigurableRuleData, DashboardData, ManageableCatalogItem, ManageableSportsCatalogs, ReportPopulationData, RoleCode } from '@socialapp/shared';
 import * as argon2 from 'argon2';
 import { AuditService } from '../audit/audit.service';
 import { AthletesService } from '../athletes/athletes.service';
@@ -104,13 +104,61 @@ export class ManagementService {
       instruments: instruments.map((item) => ({ ...item, questions: item.questions.map((question) => ({ ...question, options: question.options })) })),
     };
   }
+  async catalogOverview(): Promise<ManageableSportsCatalogs> {
+    const [programs, sports, categories, coaches] = await Promise.all([
+      this.prisma.sportsProgram.findMany({ where: { deletedAt: null }, include: { _count: { select: { athletes: true, campaigns: true } } }, orderBy: { name: 'asc' } }),
+      this.prisma.sport.findMany({ where: { deletedAt: null }, include: { _count: { select: { athletes: true, campaigns: true } } }, orderBy: { name: 'asc' } }),
+      this.prisma.category.findMany({ where: { deletedAt: null }, include: { _count: { select: { athletes: true } } }, orderBy: { name: 'asc' } }),
+      this.prisma.coach.findMany({ where: { deletedAt: null }, include: { _count: { select: { athletes: true } } }, orderBy: { name: 'asc' } }),
+    ]);
+    const item = (value: { id: string; name: string; active: boolean; _count: { athletes: number; campaigns?: number } }): ManageableCatalogItem => ({
+      id: value.id,
+      name: value.name,
+      active: value.active,
+      usageCount: value._count.athletes + (value._count.campaigns ?? 0),
+    });
+    return {
+      programs: programs.map(item),
+      sports: sports.map(item),
+      categories: categories.map(item),
+      coaches: coaches.map(item),
+    };
+  }
   async createCatalog(userId: string, kind: string, name: string) {
-    if (!name.trim()) throw new BadRequestException('Escribe un nombre para el catálogo.');
+    const cleanName = name.trim();
+    if (!cleanName || cleanName.length > 160) throw new BadRequestException('Escribe un nombre válido para el catálogo.');
     const delegates: Record<string, any> = { programs: this.prisma.sportsProgram, sports: this.prisma.sport, categories: this.prisma.category, coaches: this.prisma.coach };
     const delegate = delegates[kind];
     if (!delegate) throw new BadRequestException('Catálogo no válido.');
-    const item = kind === 'coaches' ? await delegate.create({ data: { name: name.trim(), createdBy: userId, updatedBy: userId } }) : await delegate.upsert({ where: { name: name.trim() }, update: { active: true, deletedAt: null, updatedBy: userId }, create: { name: name.trim(), createdBy: userId, updatedBy: userId } });
-    await this.audit.record({ actorUserId: userId, action: 'catalog.create', resourceType: kind, resourceId: item.id });
+    const existing = await delegate.findFirst({ where: { name: { equals: cleanName, mode: 'insensitive' } } });
+    const item = existing
+      ? await delegate.update({ where: { id: existing.id }, data: { name: cleanName, active: true, deletedAt: null, updatedBy: userId, version: { increment: 1 } } })
+      : await delegate.create({ data: { name: cleanName, createdBy: userId, updatedBy: userId } });
+    await this.audit.record({ actorUserId: userId, action: existing ? 'catalog.reactivate' : 'catalog.create', resourceType: kind, resourceId: item.id });
+    return item;
+  }
+  async updateCatalog(userId: string, kind: string, id: string, body: { name?: string; active?: boolean }) {
+    const delegates: Record<string, any> = { programs: this.prisma.sportsProgram, sports: this.prisma.sport, categories: this.prisma.category, coaches: this.prisma.coach };
+    const delegate = delegates[kind];
+    if (!delegate) throw new BadRequestException('Catálogo no válido.');
+    const cleanName = body.name?.trim();
+    if (body.name !== undefined && (!cleanName || cleanName.length > 160)) throw new BadRequestException('Escribe un nombre válido para el catálogo.');
+    if (cleanName) {
+      const duplicate = await delegate.findFirst({ where: { id: { not: id }, name: { equals: cleanName, mode: 'insensitive' }, deletedAt: null } });
+      if (duplicate) throw new BadRequestException('Ya existe un valor con ese nombre.');
+    }
+    const current = await delegate.findFirst({ where: { id, deletedAt: null } });
+    if (!current) throw new BadRequestException('El valor ya no está disponible.');
+    const item = await delegate.update({
+      where: { id },
+      data: {
+        ...(cleanName ? { name: cleanName } : {}),
+        ...(typeof body.active === 'boolean' ? { active: body.active } : {}),
+        updatedBy: userId,
+        version: { increment: 1 },
+      },
+    });
+    await this.audit.record({ actorUserId: userId, action: 'catalog.update', resourceType: kind, resourceId: id, metadata: { name: cleanName, active: body.active } });
     return item;
   }
   async saveRule(userId: string, body: Record<string, unknown>) {
