@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
-import { Activity, ArrowLeft, BookOpen, CalendarDays, CheckCircle2, ClipboardEdit, Edit3, GraduationCap, Home, MapPin, Network, Phone, RefreshCw, ShieldAlert, UserRound, UsersRound } from 'lucide-react';
-import { Link, useLocation, useParams } from 'react-router-dom';
+import { Activity, ArrowLeft, BookOpen, CalendarDays, CheckCircle2, ClipboardEdit, Edit3, GraduationCap, Home, MapPin, Network, Phone, RefreshCw, ShieldAlert, Trash2, UserRound, UsersRound } from 'lucide-react';
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { PERMISSIONS, screeningAgeGroup, type AthleteRecord } from '@socialapp/shared';
 import { useAuth } from '../features/auth/useAuth';
-import { loadAthlete, loadSocialRecord } from '../features/athletes/athlete-repository';
+import { deleteAthleteOnline, loadAthlete, loadSocialRecord } from '../features/athletes/athlete-repository';
 import { loadWorkspace } from '../features/work/work-repository';
 import type { AthleteWorkspace } from '@socialapp/shared';
 
@@ -14,9 +14,12 @@ export function AthleteDetailPage() {
   const { can } = useAuth();
   const { id = '' } = useParams();
   const location = useLocation();
+  const navigate = useNavigate();
   const [athlete, setAthlete] = useState<AthleteRecord | undefined>();
   const [loading, setLoading] = useState(true);
   const [workspace, setWorkspace] = useState<AthleteWorkspace>();
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState('');
   useEffect(() => {
     Promise.all([
       loadAthlete(id),
@@ -35,15 +38,27 @@ export function AthleteDetailPage() {
   if (loading) return <div className="p-12 text-center text-sm text-slate-500">Abriendo expediente…</div>;
   if (!athlete) return <div className="card p-10 text-center"><h1 className="text-xl font-bold text-pine-900">No encontramos este expediente</h1><Link to="/deportistas" className="btn-secondary mt-6">Volver a deportistas</Link></div>;
   const message = (location.state as { message?: string } | null)?.message;
+  async function removeAthlete() {
+    if (!window.confirm(`¿Retirar a ${athlete!.firstNames} ${athlete!.lastNames}? Dejará de aparecer en la población activa, pero el historial quedará conservado para auditoría.`)) return;
+    setDeleting(true); setDeleteError('');
+    try {
+      await deleteAthleteOnline(athlete!.id);
+      navigate('/deportistas', { replace: true, state: { message: 'Deportista retirado correctamente.' } });
+    } catch (reason) {
+      setDeleteError(reason instanceof Error ? reason.message : 'No fue posible retirar el deportista.');
+      setDeleting(false);
+    }
+  }
   return (
     <div>
       <Link to="/deportistas" className="inline-flex items-center gap-2 text-sm font-semibold text-pine-700"><ArrowLeft size={17} /> Deportistas</Link>
       {message && <div className="mt-5 flex items-center gap-3 rounded-xl bg-emerald-50 px-4 py-3 text-sm text-emerald-800"><CheckCircle2 size={19} /> {message}</div>}
+      {deleteError && <div role="alert" className="mt-5 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">{deleteError}</div>}
       <section className="relative mt-5 overflow-hidden rounded-3xl bg-pine-800 p-6 text-white md:p-9">
         <div className="absolute -right-20 -top-24 h-64 w-64 rounded-full border-[45px] border-white/5" />
         <div className="relative flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
           <div className="flex items-center gap-5"><div className="grid h-20 w-20 place-items-center rounded-3xl bg-white/10 font-display text-3xl">{athlete.firstNames[0]}{athlete.lastNames[0]}</div><div><div className="flex flex-wrap items-center gap-2"><span className="rounded-full bg-emerald-400/20 px-3 py-1 text-xs font-semibold text-emerald-100">{statusLabels[athlete.status]}</span>{athlete.syncStatus && athlete.syncStatus !== 'synced' && <span className="inline-flex items-center gap-1 rounded-full bg-amber-300/20 px-3 py-1 text-xs text-amber-100"><RefreshCw size={12} /> Pendiente de sincronizar</span>}</div><h1 className="mt-3 font-display text-4xl">{athlete.firstNames} {athlete.lastNames}</h1><p className="mt-2 text-sm text-pine-100">{athlete.age} años · {athlete.sportName} · {athlete.sportsProgramName}</p></div></div>
-          {can(PERMISSIONS.ATHLETE_WRITE) && <Link to={`/deportistas/${athlete.id}/editar`} className="btn-secondary"><Edit3 size={17} /> Editar datos</Link>}
+          {can(PERMISSIONS.ATHLETE_WRITE) && <div className="flex flex-wrap gap-2"><Link to={`/deportistas/${athlete.id}/editar`} className="btn-secondary"><Edit3 size={17} /> Editar datos</Link><button type="button" className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-red-200 bg-white px-4 text-sm font-bold text-red-700 hover:bg-red-50" disabled={deleting} onClick={() => void removeAthlete()}><Trash2 size={17}/>{deleting ? 'Retirando…' : 'Eliminar'}</button></div>}
         </div>
       </section>
       <div className="mt-7 grid gap-6 xl:grid-cols-[1fr_.8fr]">

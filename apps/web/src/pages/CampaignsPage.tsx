@@ -1,12 +1,13 @@
 import { BookOpenCheck, CalendarDays, CheckCircle2, MapPin, Plus, Search, ShieldCheck, UsersRound, WifiOff } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { PERMISSIONS, type CampaignStatus, type ScreeningCampaignData } from '@socialapp/shared';
 import { useAuth } from '../features/auth/useAuth';
 import { loadCampaigns } from '../features/work/work-repository';
 import { useConnection } from '../hooks/useConnection';
 
 export function CampaignsPage() {
+  const location = useLocation();
   const { can } = useAuth();
   const online = useConnection();
   const [items, setItems] = useState<ScreeningCampaignData[]>([]);
@@ -16,6 +17,7 @@ export function CampaignsPage() {
   const totals = useMemo(() => ({ participants: items.reduce((total, item) => total + item.participants.length, 0), completed: items.reduce((total, item) => total + item.participants.filter((participant) => participant.status === 'COMPLETED').length, 0), active: items.filter((item) => item.status === 'ACTIVE').length }), [items]);
   const visible = useMemo(() => { const term = search.trim().toLocaleLowerCase('es'); return items.filter((item) => (status === 'ALL' || item.status === status) && (!term || `${item.name} ${item.place} ${item.sportsProgramName ?? ''} ${item.sportName ?? ''}`.toLocaleLowerCase('es').includes(term))); }, [items, search, status]);
   return <div>
+    {(location.state as { message?: string } | null)?.message && <div className="mb-5 flex items-center gap-3 rounded-xl bg-emerald-50 px-4 py-3 text-sm text-emerald-800"><CheckCircle2 size={18}/>{(location.state as { message?: string }).message}</div>}
     <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between"><div><p className="text-sm font-bold text-coral-600">Trabajo de campo</p><h1 className="font-display text-4xl text-pine-900">Brigadas y tamizajes</h1><p className="mt-2 text-sm text-slate-500">Organiza jornadas, asigna población, retoma avances y consulta resultados incluso sin conexión.</p></div>{can(PERMISSIONS.SCREENING_WRITE) && <div className="flex flex-wrap gap-2"><Link className="btn-secondary" to="/instrumentos"><BookOpenCheck size={18}/> Instrumentos</Link><Link className="btn-primary" to="/brigadas/nueva"><Plus size={18}/> Nueva brigada</Link></div>}</div>
     {!online && <div className="mt-5 flex items-center gap-3 rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-800"><WifiOff size={18}/> Modo sin conexión: se muestran y guardan los datos disponibles en este dispositivo.</div>}
     <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4"><Kpi icon={<ShieldCheck/>} value={items.length} label="Brigadas"/><Kpi icon={<CalendarDays/>} value={totals.active} label="En curso"/><Kpi icon={<UsersRound/>} value={totals.participants} label="Participantes"/><Kpi icon={<CheckCircle2/>} value={totals.completed} label="Tamizajes completados"/></div>

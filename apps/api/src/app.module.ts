@@ -15,6 +15,7 @@ import { SocialRecordsModule } from './social-records/social-records.module';
 import { WorkModule } from './work/work.module';
 import { CampaignsModule } from './campaigns/campaigns.module';
 import { ManagementModule } from './management/management.module';
+import { AiReportsModule } from './ai-reports/ai-reports.module';
 
 @Module({
   imports: [
@@ -31,6 +32,7 @@ import { ManagementModule } from './management/management.module';
     WorkModule,
     CampaignsModule,
     ManagementModule,
+    AiReportsModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: ThrottlerGuard },

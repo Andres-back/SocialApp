@@ -484,6 +484,34 @@ export interface ReportPopulationData extends DashboardData {
   filters: Record<string, string>;
 }
 
+export type AiRiskLevel = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+export type AiReportStatus = 'DRAFT' | 'REVIEWED';
+
+export interface AiRiskReportData {
+  id: string;
+  athleteId: string;
+  sourceParticipantId?: string | null;
+  riskLevel: AiRiskLevel;
+  summary: string;
+  riskFactors: string[];
+  protectiveFactors: string[];
+  recommendations: string[];
+  urgentActions: string[];
+  limitations: string;
+  status: AiReportStatus;
+  model: string;
+  generatedAt: string;
+  reviewedAt?: string | null;
+  version: number;
+}
+
+export interface IndividualReportData {
+  athlete: AthleteRecord;
+  workspace: AthleteWorkspace;
+  aiReports: AiRiskReportData[];
+  generatedAt: string;
+}
+
 export function matchesConfigurableRule(rule: Pick<ConfigurableRuleData, 'field' | 'operator' | 'expectedValue'>, values: Record<string, unknown>): boolean {
   const actual = values[rule.field];
   if (rule.operator === 'EQUALS') return String(actual) === rule.expectedValue;

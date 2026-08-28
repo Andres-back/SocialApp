@@ -125,3 +125,9 @@ export async function changeCampaignStatusOffline(campaign: ScreeningCampaignDat
     professionalName: campaign.professionalName, athleteIds: campaign.participants.map((participant) => participant.athleteId), status, version: campaign.version,
   }, campaign.instrument, Object.fromEntries(campaign.participants.map((participant) => [participant.athleteId, participant.athleteName])), { sportsProgramName: campaign.sportsProgramName, sportName: campaign.sportName });
 }
+
+export async function deleteCampaignOnline(id: string): Promise<void> {
+  if (!navigator.onLine) throw new Error('Conéctate para eliminar una brigada de forma segura.');
+  await api.deleteCampaign(id);
+  await db.campaigns.delete(id);
+}

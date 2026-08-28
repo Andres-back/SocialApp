@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, Query, Req } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Post, Query, Req } from '@nestjs/common';
 import { PERMISSIONS, ROLES } from '@socialapp/shared';
 import type { Request } from 'express';
 import type { RequestUser } from '../iam/authenticated-user';
@@ -23,5 +23,10 @@ export class AthletesController {
   @Post() @RequirePermissions(PERMISSIONS.ATHLETE_WRITE)
   upsert(@Body() dto: UpsertAthleteDto, @Req() request: Request & { user: RequestUser }) {
     return this.athletes.upsert(request.user.id, dto, dto.version);
+  }
+
+  @Delete(':id') @RequirePermissions(PERMISSIONS.ATHLETE_WRITE)
+  remove(@Param('id') id: string, @Req() request: Request & { user: RequestUser }) {
+    return this.athletes.remove(request.user.id, id);
   }
 }

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { ArrowRight, ClipboardList, Plus, Search, UserRound, WifiOff } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { PERMISSIONS, type AthleteRecord } from '@socialapp/shared';
 import { loadAthletes } from '../features/athletes/athlete-repository';
 import { useAuth } from '../features/auth/useAuth';
@@ -9,6 +9,7 @@ import { useConnection } from '../hooks/useConnection';
 const statusLabels = { ACTIVE: 'Activo', RETIRED: 'Retirado', SUSPENDED: 'Suspendido', OTHER: 'Otro' };
 
 export function AthletesPage({ socialWorkView = false }: { socialWorkView?: boolean }) {
+  const location = useLocation();
   const { can } = useAuth();
   const canManageAthletes = can(PERMISSIONS.ATHLETE_WRITE);
   const canViewSocialRecord = can(PERMISSIONS.SOCIAL_RECORD_READ);
@@ -38,6 +39,7 @@ export function AthletesPage({ socialWorkView = false }: { socialWorkView?: bool
 
   return (
     <div>
+      {(location.state as { message?: string } | null)?.message && <div className="mb-5 flex items-center gap-3 rounded-xl bg-emerald-50 px-4 py-3 text-sm text-emerald-800"><ClipboardList size={18}/>{(location.state as { message?: string }).message}</div>}
       <div className="flex flex-col gap-5 md:flex-row md:items-end md:justify-between">
         <div>
           <p className="text-sm font-semibold text-coral-600">{socialWorkView ? 'Control de población' : 'Expediente único'}</p>

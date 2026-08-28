@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, Put, Req } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Post, Put, Req } from '@nestjs/common';
 import { PERMISSIONS, type ScreeningCampaignInput } from '@socialapp/shared';
 import type { Request } from 'express';
 import type { RequestUser } from '../iam/authenticated-user';
@@ -25,6 +25,12 @@ export class CampaignsController {
   @RequirePermissions(PERMISSIONS.SCREENING_WRITE)
   save(@Body() body: ScreeningCampaignInput, @Req() request: Request & { user: RequestUser }) {
     return this.campaigns.upsert(request.user.id, body, body.version);
+  }
+
+  @Delete(':id')
+  @RequirePermissions(PERMISSIONS.SCREENING_WRITE)
+  remove(@Param('id') id: string, @Req() request: Request & { user: RequestUser }) {
+    return this.campaigns.remove(request.user.id, id);
   }
 
   @Put(':campaignId/participants/:athleteId')

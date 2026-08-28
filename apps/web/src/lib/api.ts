@@ -1,4 +1,4 @@
-import type { AlertData, AthleteInput, AthleteRecord, AthleteWorkspace, AuthSession, DashboardData, FollowUpCaseData, FollowUpCaseInput, FollowUpEntryData, FollowUpEntryInput, ManageableSportsCatalogs, NetworkDiagramData, ProfessionalObservationData, ReportPopulationData, ScreeningCampaignData, ScreeningCampaignInput, ScreeningInstrumentData, ScreeningInstrumentInput, SocialRecordData, SocialRecordInput, SocioeconomicAssessmentData, SocioeconomicAssessmentInput, SportsCatalogs, SyncMutation, SyncPushResponse } from '@socialapp/shared';
+import type { AiRiskReportData, AlertData, AthleteInput, AthleteRecord, AthleteWorkspace, AuthSession, DashboardData, FollowUpCaseData, FollowUpCaseInput, FollowUpEntryData, FollowUpEntryInput, ManageableSportsCatalogs, NetworkDiagramData, ProfessionalObservationData, ReportPopulationData, ScreeningCampaignData, ScreeningCampaignInput, ScreeningInstrumentData, ScreeningInstrumentInput, SocialRecordData, SocialRecordInput, SocioeconomicAssessmentData, SocioeconomicAssessmentInput, SportsCatalogs, SyncMutation, SyncPushResponse } from '@socialapp/shared';
 
 const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:3000/api/v1';
 let accessToken: string | null = sessionStorage.getItem('socialapp.accessToken');
@@ -64,6 +64,9 @@ export const api = {
   saveAthlete(input: AthleteInput) {
     return request<AthleteRecord>('/athletes', { method: 'POST', body: JSON.stringify(input) });
   },
+  deleteAthlete(id: string) {
+    return request<{ success: boolean }>(`/athletes/${id}`, { method: 'DELETE' });
+  },
   getSportsCatalogs() {
     return request<SportsCatalogs>('/catalogs/sports');
   },
@@ -107,6 +110,7 @@ export const api = {
   listCampaigns() { return request<ScreeningCampaignData[]>('/campaigns'); },
   getCampaign(id: string) { return request<ScreeningCampaignData>(`/campaigns/${id}`); },
   saveCampaign(input: ScreeningCampaignInput) { return request<ScreeningCampaignData>('/campaigns', { method: 'POST', body: JSON.stringify(input) }); },
+  deleteCampaign(id: string) { return request<{ success: boolean }>(`/campaigns/${id}`, { method: 'DELETE' }); },
   saveScreeningResult(campaignId: string, athleteId: string, input: Record<string, unknown>) {
     return request(`/campaigns/${campaignId}/participants/${athleteId}`, { method: 'PUT', body: JSON.stringify(input) });
   },
@@ -116,6 +120,11 @@ export const api = {
     return request<ReportPopulationData>(`/reports/population${query ? `?${query}` : ''}`);
   },
   individualReport(athleteId: string) { return request(`/reports/athletes/${athleteId}`); },
+  listAiRiskReports(athleteId: string) { return request<AiRiskReportData[]>(`/athletes/${athleteId}/ai-reports`); },
+  generateAiRiskReport(athleteId: string, participantId?: string) {
+    return request<AiRiskReportData>(`/athletes/${athleteId}/ai-reports`, { method: 'POST', body: JSON.stringify({ participantId }) });
+  },
+  reviewAiRiskReport(id: string) { return request<AiRiskReportData>(`/ai-reports/${id}/review`, { method: 'PATCH' }); },
   auditExport(type: string, athleteId?: string) { return request<{ success: boolean }>('/reports/export-audit', { method: 'POST', body: JSON.stringify({ type, athleteId }) }); },
   adminOverview() { return request<Record<string, unknown>>('/admin/overview'); },
   createCatalog(kind: string, name: string) { return request(`/admin/catalogs/${kind}`, { method: 'POST', body: JSON.stringify({ name }) }); },

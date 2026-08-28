@@ -1,9 +1,9 @@
-import { ArrowLeft, CheckCircle2, Circle, ClipboardCheck, Edit3, LockKeyhole, MapPin, Play, RotateCcw, Search, WifiOff } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, Circle, ClipboardCheck, Edit3, LockKeyhole, MapPin, Play, RotateCcw, Search, Trash2, WifiOff } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { PERMISSIONS, type ScreeningCampaignData, type ScreeningParticipantStatus } from '@socialapp/shared';
 import { useAuth } from '../features/auth/useAuth';
-import { changeCampaignStatusOffline, loadCampaigns } from '../features/work/work-repository';
+import { changeCampaignStatusOffline, deleteCampaignOnline, loadCampaigns } from '../features/work/work-repository';
 import { useConnection } from '../hooks/useConnection';
 
 const participantLabels: Record<ScreeningParticipantStatus, string> = { PENDING: 'Pendiente', IN_PROGRESS: 'En proceso', COMPLETED: 'Completado' };
@@ -11,6 +11,7 @@ const participantLabels: Record<ScreeningParticipantStatus, string> = { PENDING:
 export function CampaignModePage() {
   const { id = '' } = useParams();
   const { can } = useAuth();
+  const navigate = useNavigate();
   const online = useConnection();
   const [item, setItem] = useState<ScreeningCampaignData>();
   const [search, setSearch] = useState('');
@@ -38,11 +39,23 @@ export function CampaignModePage() {
     finally { setSaving(false); }
   }
 
+  async function removeCampaign() {
+    if (!window.confirm(`¿Eliminar la brigada “${item!.name}”? Dejará de aparecer en la operación, pero sus resultados se conservarán para auditoría.`)) return;
+    setSaving(true); setError('');
+    try {
+      await deleteCampaignOnline(item!.id);
+      navigate('/brigadas', { replace: true, state: { message: 'Brigada eliminada correctamente.' } });
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'No fue posible eliminar la brigada.');
+      setSaving(false);
+    }
+  }
+
   return <div>
     <div className="flex flex-wrap items-center justify-between gap-3"><Link to="/brigadas" className="inline-flex items-center gap-2 text-sm font-semibold text-pine-700"><ArrowLeft size={17}/> Todas las brigadas</Link>{!online && <span className="inline-flex items-center gap-2 rounded-full bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-700"><WifiOff size={14}/> Modo sin conexión</span>}</div>
     <header className="mt-5 rounded-3xl bg-pine-800 p-6 text-white md:p-8">
       <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between"><div><div className="flex flex-wrap items-center gap-2"><span className="rounded-full bg-white/10 px-3 py-1 text-xs font-bold">Modo Brigada · {item.status === 'PLANNED' ? 'Planeada' : item.status === 'ACTIVE' ? 'En curso' : 'Finalizada'}</span>{item.syncStatus && item.syncStatus !== 'synced' && <span className="rounded-full bg-amber-300/20 px-3 py-1 text-xs text-amber-100">{item.syncStatus === 'pending' ? 'Pendiente de sincronizar' : item.syncStatus === 'conflict' ? 'Conflicto de sincronización' : 'Error de sincronización'}</span>}</div><h1 className="mt-3 font-display text-4xl">{item.name}</h1><p className="mt-3 flex items-center gap-2 text-sm text-pine-100"><MapPin size={17}/>{item.place} · {item.date}</p><p className="mt-2 text-xs text-pine-200">{item.sportsProgramName || 'Todos los programas'} · {item.sportName || 'Todos los deportes'} · {item.professionalName}</p><p className="mt-1 text-xs text-pine-200">{item.instrument.name} v{item.instrument.version}</p></div>
-        {canWrite && <div className="flex flex-wrap gap-2 print:hidden"><Link to={`/brigadas/${item.id}/editar`} className="btn-secondary"><Edit3 size={16}/> Editar</Link><button className="btn-secondary" disabled={saving} onClick={() => void transition()}>{item.status === 'PLANNED' ? <><Play size={16}/> Iniciar jornada</> : item.status === 'ACTIVE' ? <><LockKeyhole size={16}/> Cerrar jornada</> : <><RotateCcw size={16}/> Reabrir</>}</button></div>}
+        {canWrite && <div className="flex flex-wrap gap-2 print:hidden"><Link to={`/brigadas/${item.id}/editar`} className="btn-secondary"><Edit3 size={16}/> Editar</Link><button className="btn-secondary" disabled={saving} onClick={() => void transition()}>{item.status === 'PLANNED' ? <><Play size={16}/> Iniciar jornada</> : item.status === 'ACTIVE' ? <><LockKeyhole size={16}/> Cerrar jornada</> : <><RotateCcw size={16}/> Reabrir</>}</button><button type="button" className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-red-200 bg-white px-4 text-sm font-bold text-red-700 hover:bg-red-50" disabled={saving} onClick={() => void removeCampaign()}><Trash2 size={16}/> Eliminar</button></div>}
       </div>
       <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4"><Mini value={item.participants.length} label="Total"/><Mini value={item.participants.length-completed-inProgress} label="Pendientes"/><Mini value={inProgress} label="En proceso"/><Mini value={completed} label="Completados"/></div>
       <div className="mt-5 h-2 overflow-hidden rounded-full bg-white/10"><div className="h-full bg-emerald-300" style={{ width: `${item.participants.length ? completed / item.participants.length * 100 : 0}%` }}/></div>

@@ -100,6 +100,21 @@ export class AthletesService {
     return this.serialize(athlete);
   }
 
+  async remove(userId: string, id: string) {
+    const athlete = await this.prisma.athlete.findFirst({ where: { id, deletedAt: null } });
+    if (!athlete) throw new NotFoundException('No encontramos este deportista.');
+    const now = new Date();
+    await this.prisma.$transaction([
+      this.prisma.athlete.update({ where: { id }, data: { deletedAt: now, status: 'RETIRED', updatedBy: userId, version: { increment: 1 } } }),
+      this.prisma.campaignParticipant.updateMany({
+        where: { athleteId: id, deletedAt: null, status: { in: ['PENDING', 'IN_PROGRESS'] } },
+        data: { deletedAt: now, updatedBy: userId },
+      }),
+    ]);
+    await this.audit.record({ actorUserId: userId, action: 'athlete.delete', resourceType: 'Athlete', resourceId: id, metadata: { mode: 'soft-delete' } });
+    return { success: true };
+  }
+
   private serialize(athlete: any, includeSocialRecord = true): AthleteRecord {
     const today = new Date();
     const birth = new Date(athlete.birthDate);

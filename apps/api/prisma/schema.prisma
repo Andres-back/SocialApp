@@ -342,6 +342,7 @@ model Athlete {
   genograms                Genogram[]
   ecomaps                  Ecomap[]
   campaignParticipants     CampaignParticipant[]
+  aiRiskReports            AiRiskReport[]
 
   @@unique([documentType, documentNumber])
   @@index([firstNames, lastNames])
@@ -636,9 +637,41 @@ model CampaignParticipant {
   version     Int                        @default(1)
   campaign    ScreeningCampaign          @relation(fields: [campaignId], references: [id], onDelete: Cascade)
   athlete     Athlete                    @relation(fields: [athleteId], references: [id], onDelete: Restrict)
+  aiRiskReports AiRiskReport[]
 
   @@unique([campaignId, athleteId])
   @@index([athleteId, status])
+}
+
+model AiRiskReport {
+  id                  String               @id @default(uuid()) @db.Uuid
+  athleteId           String               @db.Uuid
+  sourceParticipantId String?              @db.Uuid
+  riskLevel           String               @db.VarChar(20)
+  summary             String
+  riskFactors         Json
+  protectiveFactors   Json
+  recommendations     Json
+  urgentActions       Json
+  limitations         String
+  status              String               @default("DRAFT") @db.VarChar(20)
+  model               String               @db.VarChar(120)
+  promptVersion       Int                  @default(1)
+  sourceHash          String               @db.VarChar(64)
+  generatedAt         DateTime             @default(now())
+  reviewedAt          DateTime?
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  createdBy           String?              @db.Uuid
+  updatedBy           String?              @db.Uuid
+  deletedAt           DateTime?
+  version             Int                  @default(1)
+  athlete             Athlete              @relation(fields: [athleteId], references: [id], onDelete: Restrict)
+  sourceParticipant   CampaignParticipant? @relation(fields: [sourceParticipantId], references: [id], onDelete: SetNull)
+
+  @@index([athleteId, generatedAt])
+  @@index([sourceParticipantId])
+  @@index([deletedAt])
 }
 
 model ConfigurableRule {

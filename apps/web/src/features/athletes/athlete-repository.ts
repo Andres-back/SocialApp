@@ -92,6 +92,12 @@ export async function saveAthleteOffline(input: AthleteInput, catalogs: SportsCa
   return record;
 }
 
+export async function deleteAthleteOnline(id: string): Promise<void> {
+  if (!navigator.onLine) throw new Error('Conéctate para retirar un deportista de forma segura.');
+  await api.deleteAthlete(id);
+  await db.athletes.delete(id);
+}
+
 export async function loadSocialRecord(athleteId: string): Promise<SocialRecordData | null> {
   if (navigator.onLine) {
     try {
