@@ -20,19 +20,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    if (!user && navigator.onLine) {
-      setLoading(true);
-      api.refresh()
-        .then((session) => {
-          if (!session) return;
-          setAccessToken(session.accessToken);
-          setUser(session.user);
-          sessionStorage.setItem(PROFILE_KEY, JSON.stringify(session.user));
-        })
-        .catch(() => undefined)
-        .finally(() => setLoading(false));
-    }
-  }, [user]);
+    if (!navigator.onLine) return;
+    setLoading(true);
+    api.refresh()
+      .then((session) => {
+        if (!session) return;
+        setAccessToken(session.accessToken);
+        setUser(session.user);
+        sessionStorage.setItem(PROFILE_KEY, JSON.stringify(session.user));
+      })
+      .catch(() => undefined)
+      .finally(() => setLoading(false));
+  }, []);
 
   const value = useMemo(
     () => ({

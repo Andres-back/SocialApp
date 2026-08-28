@@ -41,7 +41,7 @@ async function main() {
   }
 
   const passwordHash = await argon2.hash('SocialApp2026!', { type: argon2.argon2id });
-  const user = await prisma.user.upsert({ where: { email: 'trabajo.social@demo.local' }, update: { displayName: 'Laura Martínez', passwordHash }, create: { email: 'trabajo.social@demo.local', displayName: 'Laura Martínez', passwordHash } });
+  const user = await prisma.user.upsert({ where: { email: 'trabajo.social@demo.local' }, update: { displayName: 'Sheynner Correa', passwordHash }, create: { email: 'trabajo.social@demo.local', displayName: 'Sheynner Correa', passwordHash } });
   await prisma.userRole.upsert({ where: { userId_roleId: { userId: user.id, roleId: roles.get(ROLES.SOCIAL_WORKER)! } }, update: {}, create: { userId: user.id, roleId: roles.get(ROLES.SOCIAL_WORKER)! } });
   const demoUsers = [
     { email: 'admin@demo.local', displayName: 'Administración Demo', role: ROLES.ADMIN },
