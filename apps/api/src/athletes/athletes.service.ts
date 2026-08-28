@@ -73,16 +73,22 @@ export class AthletesService {
       currentlyEnrolled: dto.currentlyEnrolled,
       updatedBy: userId,
     };
+    const guardian = dto.guardian ? {
+      name: dto.guardian.name?.trim() || 'Por definir',
+      relationship: dto.guardian.relationship?.trim() || 'Por definir',
+      phone: dto.guardian.phone?.trim() || 'Por definir',
+      email: dto.guardian.email?.trim() || null,
+    } : null;
     const athlete = existing
       ? await this.prisma.athlete.update({
           where: { id: dto.id },
           data: {
             ...common,
             version: { increment: 1 },
-            guardian: { upsert: {
-              create: { ...dto.guardian, email: dto.guardian.email || null, createdBy: userId, updatedBy: userId },
-              update: { ...dto.guardian, email: dto.guardian.email || null, updatedBy: userId, version: { increment: 1 } },
-            } },
+            ...(guardian ? { guardian: { upsert: {
+              create: { ...guardian, createdBy: userId, updatedBy: userId },
+              update: { ...guardian, updatedBy: userId, version: { increment: 1 } },
+            } } } : {}),
           },
           include: athleteInclude,
         })
@@ -92,7 +98,7 @@ export class AthletesService {
             ...common,
             createdBy: userId,
             version: 1,
-            guardian: { create: { ...dto.guardian, email: dto.guardian.email || null, createdBy: userId, updatedBy: userId } },
+            ...(guardian ? { guardian: { create: { ...guardian, createdBy: userId, updatedBy: userId } } } : {}),
           },
           include: athleteInclude,
         });

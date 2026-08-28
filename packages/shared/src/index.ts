@@ -166,7 +166,7 @@ export interface AthleteInput {
   schoolGrade?: string | null;
   schoolShift?: string | null;
   currentlyEnrolled: boolean;
-  guardian: GuardianData;
+  guardian?: GuardianData;
   version: number;
 }
 

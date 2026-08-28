@@ -1,11 +1,11 @@
 import { Type } from 'class-transformer';
-import { IsBoolean, IsDateString, IsEmail, IsIn, IsInt, IsOptional, IsString, IsUUID, MaxLength, Min, MinLength, ValidateNested } from 'class-validator';
+import { IsBoolean, IsDateString, IsEmail, IsIn, IsInt, IsOptional, IsString, IsUUID, MaxLength, Min, MinLength, ValidateIf, ValidateNested } from 'class-validator';
 import { ATHLETE_STATUSES, DOCUMENT_TYPES, SEX_OPTIONS, ZONES } from '@socialapp/shared';
 
 class GuardianDto {
-  @IsString() @MinLength(2) @MaxLength(160) name: string;
-  @IsString() @MinLength(2) @MaxLength(80) relationship: string;
-  @IsString() @MinLength(7) @MaxLength(40) phone: string;
+  @IsOptional() @ValidateIf((_object, value) => value !== '') @IsString() @MinLength(2) @MaxLength(160) name?: string;
+  @IsOptional() @ValidateIf((_object, value) => value !== '') @IsString() @MinLength(2) @MaxLength(80) relationship?: string;
+  @IsOptional() @ValidateIf((_object, value) => value !== '') @IsString() @MinLength(7) @MaxLength(40) phone?: string;
   @IsOptional() @IsEmail() @MaxLength(254) email?: string | null;
 }
 
@@ -30,6 +30,6 @@ export class UpsertAthleteDto {
   @IsOptional() @IsString() @MaxLength(40) schoolGrade?: string | null;
   @IsOptional() @IsString() @MaxLength(40) schoolShift?: string | null;
   @IsBoolean() currentlyEnrolled: boolean;
-  @ValidateNested() @Type(() => GuardianDto) guardian: GuardianDto;
+  @IsOptional() @ValidateNested() @Type(() => GuardianDto) guardian?: GuardianDto;
   @IsInt() @Min(0) version: number;
 }

@@ -76,9 +76,9 @@ async function main() {
     await prisma.userRole.upsert({ where: { userId_roleId: { userId: demoUser.id, roleId: roles.get(demo.role)! } }, update: {}, create: { userId: demoUser.id, roleId: roles.get(demo.role)! } });
   }
 
-  const programNames = ['Semillero deportivo', 'Escuela de formación', 'Deporte asociado'];
-  const sportNames = ['Atletismo', 'Baloncesto', 'Fútbol', 'Fútbol de salón', 'Natación', 'Voleibol'];
-  const categoryNames = ['6 a 9 años', '10 a 13 años', '14 a 17 años'];
+  const programNames = ['Por definir', 'Semillero deportivo', 'Escuela de formación', 'Deporte asociado'];
+  const sportNames = ['Por definir', 'Atletismo', 'Baloncesto', 'Fútbol', 'Fútbol de salón', 'Natación', 'Voleibol'];
+  const categoryNames = ['Por definir', '6 a 9 años', '10 a 13 años', '14 a 17 años'];
   const programs = new Map<string, string>();
   const sports = new Map<string, string>();
   const categories = new Map<string, string>();

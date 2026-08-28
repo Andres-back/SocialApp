@@ -30,6 +30,11 @@ describe('UpsertAthleteDto', () => {
   it('accepts a complete fictitious athlete', async () => {
     expect(await validate(plainToInstance(UpsertAthleteDto, valid))).toHaveLength(0);
   });
+  it('accepts registration without guardian information', async () => {
+    const withoutGuardian: Record<string, unknown> = { ...valid };
+    delete withoutGuardian.guardian;
+    expect(await validate(plainToInstance(UpsertAthleteDto, withoutGuardian))).toHaveLength(0);
+  });
   it('rejects an unknown status and an invalid guardian phone', async () => {
     const errors = await validate(plainToInstance(UpsertAthleteDto, { ...valid, status: 'UNKNOWN', guardian: { ...valid.guardian, phone: '12' } }));
     expect(errors.map((error) => error.property)).toEqual(expect.arrayContaining(['status', 'guardian']));

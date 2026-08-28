@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
-import { ArrowRight, ClipboardList, Plus, Search, UserRound, WifiOff } from 'lucide-react';
+import { ArrowRight, ClipboardList, Edit3, Plus, Search, Trash2, UserRound, WifiOff } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
 import { PERMISSIONS, type AthleteRecord } from '@socialapp/shared';
-import { loadAthletes } from '../features/athletes/athlete-repository';
+import { deleteAthleteOnline, loadAthletes } from '../features/athletes/athlete-repository';
 import { useAuth } from '../features/auth/useAuth';
 import { useConnection } from '../hooks/useConnection';
 
@@ -20,6 +20,8 @@ export function AthletesPage({ socialWorkView = false }: { socialWorkView?: bool
   const [sport, setSport] = useState('');
   const [status, setStatus] = useState('');
   const [loading, setLoading] = useState(true);
+  const [deletingId, setDeletingId] = useState('');
+  const [actionError, setActionError] = useState('');
   const online = useConnection();
 
   useEffect(() => {
@@ -37,9 +39,22 @@ export function AthletesPage({ socialWorkView = false }: { socialWorkView?: bool
     return () => window.clearTimeout(timer);
   }, [search, program, sport, status, online]);
 
+  async function removeAthlete(athlete: AthleteRecord) {
+    if (!window.confirm(`¿Eliminar a ${athlete.firstNames} ${athlete.lastNames}? Se retirará de la población activa y se conservará su historial.`)) return;
+    setDeletingId(athlete.id); setActionError('');
+    try {
+      await deleteAthleteOnline(athlete.id);
+      setAthletes((current) => current.filter((item) => item.id !== athlete.id));
+      setAllAthletes((current) => current.filter((item) => item.id !== athlete.id));
+    } catch (reason) {
+      setActionError(reason instanceof Error ? reason.message : 'No fue posible eliminar el deportista.');
+    } finally { setDeletingId(''); }
+  }
+
   return (
     <div>
       {(location.state as { message?: string } | null)?.message && <div className="mb-5 flex items-center gap-3 rounded-xl bg-emerald-50 px-4 py-3 text-sm text-emerald-800"><ClipboardList size={18}/>{(location.state as { message?: string }).message}</div>}
+      {actionError && <div role="alert" className="mb-5 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">{actionError}</div>}
       <div className="flex flex-col gap-5 md:flex-row md:items-end md:justify-between">
         <div>
           <p className="text-sm font-semibold text-coral-600">{socialWorkView ? 'Control de población' : 'Expediente único'}</p>
@@ -74,7 +89,8 @@ export function AthletesPage({ socialWorkView = false }: { socialWorkView?: bool
         ) : (
           <div className="divide-y divide-slate-100">
             {athletes.map((athlete) => (
-              <Link key={athlete.id} to={`/deportistas/${athlete.id}`} className="group grid gap-4 p-5 transition hover:bg-pine-50/50 md:grid-cols-[1.3fr_.9fr_.8fr_auto] md:items-center md:px-6">
+              <article key={athlete.id} className="grid gap-3 p-5 transition hover:bg-pine-50/50 md:grid-cols-[1fr_auto] md:items-center md:px-6">
+              <Link to={`/deportistas/${athlete.id}`} className="group grid gap-4 md:grid-cols-[1.3fr_.9fr_.8fr_auto] md:items-center">
                 <div className="flex items-center gap-4">
                   <div className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-pine-100 font-bold text-pine-700">{athlete.firstNames[0]}{athlete.lastNames[0]}</div>
                   <div><p className="font-semibold text-pine-900">{athlete.firstNames} {athlete.lastNames}</p><p className="mt-1 text-xs text-slate-500">{athlete.internalCode} · {athlete.age} años</p></div>
@@ -86,6 +102,8 @@ export function AthletesPage({ socialWorkView = false }: { socialWorkView?: bool
                 </div>}
                 <div className="flex items-center justify-between md:justify-end"><span className="text-xs text-slate-400 md:hidden">{statusLabels[athlete.status]}</span><ArrowRight className="text-slate-300 transition group-hover:translate-x-1 group-hover:text-coral-500" size={20} /></div>
               </Link>
+              {canManageAthletes && <div className="flex gap-2"><Link aria-label={`Editar ${athlete.firstNames}`} title="Editar" to={`/deportistas/${athlete.id}/editar`} className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-slate-200 px-3 text-sm font-bold text-pine-700 hover:bg-white"><Edit3 size={16}/><span className="hidden xl:inline">Editar</span></Link><button type="button" aria-label={`Eliminar ${athlete.firstNames}`} title="Eliminar" disabled={deletingId===athlete.id} onClick={()=>void removeAthlete(athlete)} className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-red-200 px-3 text-sm font-bold text-red-700 hover:bg-red-50"><Trash2 size={16}/><span className="hidden xl:inline">{deletingId===athlete.id?'Eliminando…':'Eliminar'}</span></button></div>}
+              </article>
             ))}
           </div>
         )}

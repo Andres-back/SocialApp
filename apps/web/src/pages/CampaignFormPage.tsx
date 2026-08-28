@@ -59,7 +59,7 @@ export function CampaignFormPage() {
   async function save() {
     setError('');
     const instrument = instruments.find((item) => item.id === values.instrumentId);
-    if (!values.name.trim() || !values.place.trim() || !instrument) return setError('Completa el nombre, lugar e instrumento de la brigada.');
+    if (!instrument) return setError('Selecciona el instrumento de la brigada.');
     if (selected.length === 0) return setError('Selecciona al menos un deportista.');
     const incompatible = instrument.ageGroup && ['6 a 9 años', '10 a 13 años', '14 a 17 años'].includes(instrument.ageGroup)
       ? athletes.filter((athlete) => selected.includes(athlete.id) && !instrumentMatchesAge(instrument, athlete.age)) : [];
@@ -67,8 +67,9 @@ export function CampaignFormPage() {
     setSaving(true);
     try {
       const campaignId = existing?.id ?? crypto.randomUUID();
+      const campaignName = values.name.trim() || `Brigada ${instrument.name} · ${values.date}`;
       const input: ScreeningCampaignInput = {
-        id: campaignId, name: values.name.trim(), date: values.date, place: values.place.trim(), sportsProgramId: values.programId || null,
+        id: campaignId, name: campaignName, date: values.date, place: values.place.trim() || 'Por definir', sportsProgramId: values.programId || null,
         sportId: values.sportId || null, instrumentId: instrument.id, professionalName: existing?.professionalName ?? user?.displayName ?? 'Trabajo Social',
         athleteIds: selected, status: values.status, version: existing?.version ?? 0,
       };
@@ -85,13 +86,13 @@ export function CampaignFormPage() {
   return <div className="mx-auto max-w-5xl">
     <Link to={existing ? `/brigadas/${existing.id}` : '/brigadas'} className="inline-flex items-center gap-2 text-sm font-semibold text-pine-700"><ArrowLeft size={17}/> Volver</Link>
     <h1 className="mt-5 font-display text-4xl text-pine-900">{existing ? 'Editar brigada' : 'Nueva brigada'}</h1>
-    <p className="mt-2 text-sm text-slate-500">Define la jornada y deja instrumentos y población disponibles para trabajar sin conexión.</p>
+    <p className="mt-2 text-sm text-slate-500">Solo debes seleccionar el instrumento y al menos un deportista. Nombre, fecha y lugar pueden completarse después.</p>
     {suggestion && <div className="mt-5 rounded-xl bg-blue-50 px-4 py-3 text-sm text-blue-800">{suggestion}</div>}
     {error && <div role="alert" className="mt-5 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
     <section className="card mt-6 grid gap-5 p-5 md:grid-cols-2 md:p-7">
-      <Field label="Nombre de la brigada"><input className="field" value={values.name} onChange={(event) => setValues({ ...values, name: event.target.value })}/></Field>
+      <Field label="Nombre de la brigada (opcional)"><input className="field" placeholder="Se genera automáticamente" value={values.name} onChange={(event) => setValues({ ...values, name: event.target.value })}/></Field>
       <Field label="Fecha"><input type="date" className="field" value={values.date} onChange={(event) => setValues({ ...values, date: event.target.value })}/></Field>
-      <Field label="Lugar"><input className="field" value={values.place} onChange={(event) => setValues({ ...values, place: event.target.value })}/></Field>
+      <Field label="Lugar (opcional)"><input className="field" placeholder="Por definir" value={values.place} onChange={(event) => setValues({ ...values, place: event.target.value })}/></Field>
       <Field label="Estado inicial"><select className="field" value={values.status} onChange={(event) => setValues({ ...values, status: event.target.value as CampaignStatus })}><option value="PLANNED">Planeada</option><option value="ACTIVE">En curso</option>{existing?.status === 'COMPLETED' && <option value="COMPLETED">Finalizada</option>}</select></Field>
       <Field label="Instrumento"><select className="field" value={values.instrumentId} onChange={(event) => setValues({ ...values, instrumentId: event.target.value })}>{instruments.map((item) => <option key={item.id} value={item.id}>{item.name} v{item.version}{item.ageGroup ? ` · ${item.ageGroup}` : ''}</option>)}</select></Field>
       <Field label="Programa"><select className="field" value={values.programId} onChange={(event) => setValues({ ...values, programId: event.target.value })}><option value="">Todos</option>{catalogs?.programs.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></Field>

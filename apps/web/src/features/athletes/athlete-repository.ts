@@ -63,6 +63,7 @@ export async function saveAthleteOffline(input: AthleteInput, catalogs: SportsCa
   const findName = (items: { id: string; name: string }[], id?: string | null) => items.find((item) => item.id === id)?.name ?? null;
   const record: AthleteRecord = {
     ...input,
+    guardian: input.guardian ?? existing?.guardian ?? { name: '', relationship: '', phone: '', email: null },
     age: ageFromDate(input.birthDate),
     sportsProgramName: findName(catalogs.programs, input.sportsProgramId) ?? '',
     sportName: findName(catalogs.sports, input.sportId) ?? '',
