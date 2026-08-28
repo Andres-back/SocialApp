@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AthleteInput, SocialRecordInput, SportsCatalogs } from '@socialapp/shared';
-import { api } from '../../lib/api';
+import { api, ApiRequestError } from '../../lib/api';
 import { db } from '../../lib/db';
-import { loadSocialRecord, saveAthleteOffline, saveSocialRecordOffline } from './athlete-repository';
+import { loadAthlete, loadAthletes, loadSocialRecord, saveAthleteOffline, saveSocialRecordOffline } from './athlete-repository';
 
 const catalogs: SportsCatalogs = {
   programs: [{ id: 'c3da0a9e-5871-4b22-931b-2f55ced6e59b', name: 'Escuela de formación' }],
@@ -25,7 +25,10 @@ describe('athlete offline repository', () => {
     await db.open();
     Object.defineProperty(navigator, 'onLine', { configurable: true, value: false });
   });
-  afterEach(async () => db.delete());
+  afterEach(async () => {
+    vi.restoreAllMocks();
+    await db.delete();
+  });
 
   it('stores an athlete and its mutation atomically while offline', async () => {
     const saved = await saveAthleteOffline(athlete, catalogs);
@@ -59,5 +62,36 @@ describe('athlete offline repository', () => {
 
     expect((await loadSocialRecord(athlete.id))?.id).toBe(social.id);
     request.mockRestore();
+  });
+
+  it('removes a stale synced athlete after the server no longer lists it', async () => {
+    await saveAthleteOffline(athlete, catalogs);
+    await db.athletes.update(athlete.id, { syncStatus: 'synced' });
+    await db.syncQueue.clear();
+    Object.defineProperty(navigator, 'onLine', { configurable: true, value: true });
+    vi.spyOn(api, 'listAthletes').mockResolvedValue([]);
+
+    expect(await loadAthletes()).toEqual([]);
+    expect(await db.athletes.get(athlete.id)).toBeUndefined();
+  });
+
+  it('keeps an unsynchronized local athlete when the server list does not contain it yet', async () => {
+    await saveAthleteOffline(athlete, catalogs);
+    Object.defineProperty(navigator, 'onLine', { configurable: true, value: true });
+    vi.spyOn(api, 'listAthletes').mockResolvedValue([]);
+
+    expect(await loadAthletes()).toHaveLength(1);
+    expect(await db.athletes.get(athlete.id)).toMatchObject({ syncStatus: 'pending' });
+  });
+
+  it('drops a stale synced athlete when its detail endpoint returns 404', async () => {
+    await saveAthleteOffline(athlete, catalogs);
+    await db.athletes.update(athlete.id, { syncStatus: 'synced' });
+    await db.syncQueue.clear();
+    Object.defineProperty(navigator, 'onLine', { configurable: true, value: true });
+    vi.spyOn(api, 'getAthlete').mockRejectedValue(new ApiRequestError('No encontramos este deportista.', 404));
+
+    expect(await loadAthlete(athlete.id)).toBeUndefined();
+    expect(await db.athletes.get(athlete.id)).toBeUndefined();
   });
 });

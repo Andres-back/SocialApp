@@ -1,7 +1,8 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import type { ScreeningCampaignInput, ScreeningInstrumentData, SocioeconomicAssessmentInput } from '@socialapp/shared';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { ScreeningCampaignData, ScreeningCampaignInput, ScreeningInstrumentData, SocioeconomicAssessmentInput } from '@socialapp/shared';
+import { api } from '../../lib/api';
 import { db } from '../../lib/db';
-import { saveAssessmentOffline, saveCampaignOffline, saveFollowUpOffline, saveScreeningProgressOffline } from './work-repository';
+import { loadCampaigns, saveAssessmentOffline, saveCampaignOffline, saveFollowUpOffline, saveScreeningProgressOffline } from './work-repository';
 
 describe('offline social work repository', () => {
   beforeEach(async () => {
@@ -9,7 +10,10 @@ describe('offline social work repository', () => {
     await db.open();
     Object.defineProperty(navigator, 'onLine', { configurable: true, value: false });
   });
-  afterEach(async () => db.delete());
+  afterEach(async () => {
+    vi.restoreAllMocks();
+    await db.delete();
+  });
 
   it('stores a socioeconomic assessment and its pending mutation atomically', async () => {
     const input: SocioeconomicAssessmentInput = {
@@ -51,5 +55,20 @@ describe('offline social work repository', () => {
     const saved = await db.campaigns.get(campaignId);
     expect(saved?.participants[0]).toMatchObject({ status: 'IN_PROGRESS', responses: { q1: 'No' }, syncStatus: 'pending' });
     expect(await db.syncQueue.where('entityType').equals('screening-result').count()).toBe(1);
+  });
+
+  it('removes a stale synced campaign after it was deleted on the server', async () => {
+    const campaign = {
+      id: crypto.randomUUID(), name: 'Brigada retirada', date: '2026-08-27', place: 'Lugar QA', instrumentId: crypto.randomUUID(),
+      professionalName: 'Laura', athleteIds: [], status: 'ACTIVE', version: 1,
+      instrument: { id: crypto.randomUUID(), name: 'Preventivo', version: 1, active: true, questions: [] },
+      participants: [], createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), syncStatus: 'synced',
+    } satisfies ScreeningCampaignData;
+    await db.campaigns.put(campaign);
+    Object.defineProperty(navigator, 'onLine', { configurable: true, value: true });
+    vi.spyOn(api, 'listCampaigns').mockResolvedValue([]);
+
+    expect(await loadCampaigns()).toEqual([]);
+    expect(await db.campaigns.get(campaign.id)).toBeUndefined();
   });
 });

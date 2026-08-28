@@ -4,6 +4,13 @@ const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:3000/api/v1';
 let accessToken: string | null = sessionStorage.getItem('socialapp.accessToken');
 let activeRefresh: Promise<AuthSession | null> | null = null;
 
+export class ApiRequestError extends Error {
+  constructor(message: string, public readonly status: number) {
+    super(message);
+    this.name = 'ApiRequestError';
+  }
+}
+
 export function setAccessToken(token: string | null) {
   accessToken = token;
   if (token) sessionStorage.setItem('socialapp.accessToken', token);
@@ -22,7 +29,7 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   });
   if (!response.ok) {
     const body = (await response.json().catch(() => null)) as { message?: string } | null;
-    throw new Error(body?.message ?? 'No fue posible completar la solicitud.');
+    throw new ApiRequestError(body?.message ?? 'No fue posible completar la solicitud.', response.status);
   }
   if (response.status === 204) return null as T;
   return response.json() as Promise<T>;

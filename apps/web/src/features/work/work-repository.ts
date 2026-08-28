@@ -85,8 +85,18 @@ export async function loadCampaigns(): Promise<ScreeningCampaignData[]> {
     }
     const pending = new Map(local.filter((item) => dirtyCampaignIds.has(item.id)).map((item) => [item.id, item]));
     const remote = data.map((item) => ({ ...item, participants: item.participants.map((participant) => ({ ...participant, syncStatus: 'synced' as const })), syncStatus: 'synced' as const }));
-    await db.campaigns.bulkPut(remote.filter((item) => !pending.has(item.id)));
-    return [...remote.map((item) => pending.get(item.id) ?? item), ...local.filter((item) => !data.some((remoteItem) => remoteItem.id === item.id))].sort((a, b) => b.date.localeCompare(a.date));
+    const remoteIds = new Set(remote.map((item) => item.id));
+    const staleIds = local
+      .filter((item) => !remoteIds.has(item.id) && !dirtyCampaignIds.has(item.id) && (!item.syncStatus || item.syncStatus === 'synced'))
+      .map((item) => item.id);
+    await db.transaction('rw', db.campaigns, async () => {
+      await db.campaigns.bulkPut(remote.filter((item) => !pending.has(item.id)));
+      await db.campaigns.bulkDelete(staleIds);
+    });
+    return [
+      ...remote.map((item) => pending.get(item.id) ?? item),
+      ...local.filter((item) => !remoteIds.has(item.id) && !staleIds.includes(item.id)),
+    ].sort((a, b) => b.date.localeCompare(a.date));
   } catch { /* offline */ }
   return db.campaigns.orderBy('date').reverse().toArray();
 }
@@ -99,7 +109,15 @@ export async function saveCampaignOffline(input: ScreeningCampaignInput, instrum
   const participants = input.athleteIds.map((athleteId) => existing?.participants.find((item) => item.athleteId === athleteId) ?? { id: crypto.randomUUID(), athleteId, athleteName: athleteNames[athleteId] ?? 'Deportista', status: 'PENDING' as const, responses: {}, version: 1, syncStatus: 'pending' as const });
   const record: ScreeningCampaignData = { ...input, instrument, participants, sportsProgramName: labels?.sportsProgramName ?? existing?.sportsProgramName ?? null, sportName: labels?.sportName ?? existing?.sportName ?? null, createdAt: existing?.createdAt ?? now, updatedAt: now, syncStatus: 'pending' };
   await db.transaction('rw', db.campaigns, db.syncQueue, async () => { await db.campaigns.put(record); await queue('campaign', input.id, input, input.version, existing ? 'update' : 'create'); });
-  syncSoon(); return record;
+  if (navigator.onLine) {
+    try {
+      await synchronize();
+      return (await db.campaigns.get(input.id)) ?? record;
+    } catch {
+      // The local campaign remains queued for the next automatic retry.
+    }
+  }
+  return record;
 }
 export async function saveScreeningProgressOffline(campaignId: string, athleteId: string, responses: Record<string, unknown>, status: 'IN_PROGRESS' | 'COMPLETED') {
   const campaign = await db.campaigns.get(campaignId); if (!campaign) throw new Error('No encontramos la brigada en este dispositivo.');

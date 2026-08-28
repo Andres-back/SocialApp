@@ -1,5 +1,5 @@
 import type { AthleteInput, AthleteRecord, SocialRecordData, SocialRecordInput, SportsCatalogs } from '@socialapp/shared';
-import { api } from '../../lib/api';
+import { api, ApiRequestError } from '../../lib/api';
 import { db } from '../../lib/db';
 import { synchronize } from '../../lib/sync-engine';
 
@@ -31,7 +31,23 @@ export async function loadAthletes(search = ''): Promise<AthleteRecord[]> {
   if (navigator.onLine) {
     try {
       const remote = await api.listAthletes(search);
-      await db.athletes.bulkPut(remote.map((item) => ({ ...item, syncStatus: 'synced' as const })));
+      if (!search) {
+        const [local, queued] = await Promise.all([
+          db.athletes.toArray(),
+          db.syncQueue.where('entityType').equals('athlete').filter((item) => ['pending', 'processing', 'error', 'conflict'].includes(item.status)).toArray(),
+        ]);
+        const dirtyIds = new Set(queued.map((item) => item.entityId));
+        const remoteIds = new Set(remote.map((item) => item.id));
+        const staleIds = local
+          .filter((item) => !remoteIds.has(item.id) && !dirtyIds.has(item.id) && (!item.syncStatus || item.syncStatus === 'synced'))
+          .map((item) => item.id);
+        await db.transaction('rw', db.athletes, async () => {
+          await db.athletes.bulkPut(remote.filter((item) => !dirtyIds.has(item.id)).map((item) => ({ ...item, syncStatus: 'synced' as const })));
+          await db.athletes.bulkDelete(staleIds);
+        });
+      } else {
+        await db.athletes.bulkPut(remote.map((item) => ({ ...item, syncStatus: 'synced' as const })));
+      }
     } catch {
       // The local replica remains available.
     }
@@ -44,17 +60,30 @@ export async function loadAthletes(search = ''): Promise<AthleteRecord[]> {
 }
 
 export async function loadAthlete(id: string): Promise<AthleteRecord | undefined> {
+  let local = await db.athletes.get(id);
   if (navigator.onLine) {
+    if (local?.syncStatus && local.syncStatus !== 'synced') {
+      try {
+        await synchronize();
+        local = await db.athletes.get(id);
+      } catch {
+        // The local record remains usable while synchronization is retried.
+      }
+    }
     try {
       const remote = await api.getAthlete(id);
       const item = { ...remote, syncStatus: 'synced' as const };
       await db.athletes.put(item);
       return item;
-    } catch {
+    } catch (error) {
+      if (error instanceof ApiRequestError && error.status === 404 && (!local?.syncStatus || local.syncStatus === 'synced')) {
+        await db.athletes.delete(id);
+        return undefined;
+      }
       // Fall back to the authorized local replica.
     }
   }
-  return db.athletes.get(id);
+  return local;
 }
 
 export async function saveAthleteOffline(input: AthleteInput, catalogs: SportsCatalogs): Promise<AthleteRecord> {
@@ -89,7 +118,14 @@ export async function saveAthleteOffline(input: AthleteInput, catalogs: SportsCa
       attempts: 0,
     });
   });
-  if (navigator.onLine) void synchronize();
+  if (navigator.onLine) {
+    try {
+      await synchronize();
+      return (await db.athletes.get(input.id)) ?? record;
+    } catch {
+      // The local record is already safe and will be retried automatically.
+    }
+  }
   return record;
 }
 

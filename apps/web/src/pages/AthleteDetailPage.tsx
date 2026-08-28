@@ -21,19 +21,28 @@ export function AthleteDetailPage() {
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState('');
   useEffect(() => {
-    Promise.all([
-      loadAthlete(id),
-      can(PERMISSIONS.SOCIAL_RECORD_READ) ? loadSocialRecord(id) : Promise.resolve(undefined),
-      can(PERMISSIONS.FOLLOW_UP_READ) ? loadWorkspace(id) : Promise.resolve(undefined),
-    ])
-      .then(([athleteData, socialRecord, work]) => {
+    void (async () => {
+      try {
+        const athleteData = await loadAthlete(id);
+        if (!athleteData) {
+          setAthlete(undefined);
+          return;
+        }
+        const canLoadRelatedData = !navigator.onLine || !athleteData.syncStatus || athleteData.syncStatus === 'synced';
+        const [socialRecord, work] = canLoadRelatedData
+          ? await Promise.all([
+              can(PERMISSIONS.SOCIAL_RECORD_READ) ? loadSocialRecord(id) : Promise.resolve(undefined),
+              can(PERMISSIONS.FOLLOW_UP_READ) ? loadWorkspace(id) : Promise.resolve(undefined),
+            ])
+          : [undefined, undefined];
         setWorkspace(work);
-        if (!athleteData) return setAthlete(undefined);
         setAthlete(socialRecord
           ? { ...athleteData, hasSocialRecord: true, socialRecordUpdatedAt: socialRecord.updatedAt }
           : athleteData);
-      })
-      .finally(() => setLoading(false));
+      } finally {
+        setLoading(false);
+      }
+    })();
   }, [id, can]);
   if (loading) return <div className="p-12 text-center text-sm text-slate-500">Abriendo expediente…</div>;
   if (!athlete) return <div className="card p-10 text-center"><h1 className="text-xl font-bold text-pine-900">No encontramos este expediente</h1><Link to="/deportistas" className="btn-secondary mt-6">Volver a deportistas</Link></div>;

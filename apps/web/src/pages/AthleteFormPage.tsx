@@ -125,8 +125,13 @@ export function AthleteFormPage() {
       ...(hasGuardian ? { guardian: { name: values.guardianName || '', relationship: values.guardianRelationship || '', phone: values.guardianPhone || '', email: values.guardianEmail || null } } : {}),
       version: recordVersion,
     };
-    await saveAthleteOffline(input, catalogs);
-    navigate(`/deportistas/${athleteId}`, { state: { message: online ? 'Deportista guardado. Sincronizando…' : 'Guardado en este dispositivo. Se sincronizará al volver la conexión.' } });
+    const saved = await saveAthleteOffline(input, catalogs);
+    const message = !online
+      ? 'Guardado en este dispositivo. Se sincronizará al volver la conexión.'
+      : saved.syncStatus === 'synced'
+        ? 'Deportista guardado y sincronizado.'
+        : 'Deportista guardado. La sincronización se reintentará automáticamente.';
+    navigate(`/deportistas/${athleteId}`, { state: { message } });
   }
 
   return (
