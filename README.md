@@ -31,7 +31,7 @@ docker compose up -d --build
 docker compose exec api npm run prisma:seed -w @socialapp/api
 ```
 
-Abra `http://localhost:8081`. Nginx sirve la PWA y comunica internamente con la API. PostgreSQL se publica en `localhost:5440` solo para facilitar tareas de desarrollo.
+Abra `http://localhost:8081`. Nginx sirve la PWA y comunica internamente con la API. PostgreSQL se publica en `127.0.0.1:5440` solo para facilitar tareas de desarrollo. Los puertos, el origen web, la contraseña de PostgreSQL y el uso de cookies seguras pueden configurarse desde `.env`.
 
 Para detener los servicios sin borrar los datos:
 

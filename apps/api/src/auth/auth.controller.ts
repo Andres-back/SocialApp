@@ -37,6 +37,9 @@ export class AuthController {
   }
 
   private setRefreshCookie(response: Response, token: string) {
-    response.cookie('socialapp_refresh', token, { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax', path: '/api/v1/auth', maxAge: 7 * 86_400_000 });
+    const secure = process.env.COOKIE_SECURE
+      ? process.env.COOKIE_SECURE === 'true'
+      : process.env.NODE_ENV === 'production';
+    response.cookie('socialapp_refresh', token, { httpOnly: true, secure, sameSite: 'lax', path: '/api/v1/auth', maxAge: 7 * 86_400_000 });
   }
 }

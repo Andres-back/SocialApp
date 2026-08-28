@@ -6,9 +6,9 @@ services:
     environment:
       POSTGRES_DB: socialapp
       POSTGRES_USER: socialapp
-      POSTGRES_PASSWORD: socialapp_dev
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-socialapp_dev}
     ports:
-      - "5440:5432"
+      - "${SOCIALAPP_DB_BIND:-127.0.0.1}:${SOCIALAPP_DB_PORT:-5440}:5432"
     volumes:
       - socialapp_postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -24,12 +24,13 @@ services:
     container_name: socialapp-api
     restart: unless-stopped
     environment:
-      DATABASE_URL: postgresql://socialapp:socialapp_dev@postgres:5432/socialapp?schema=public
+      DATABASE_URL: postgresql://socialapp:${POSTGRES_PASSWORD:-socialapp_dev}@postgres:5432/socialapp?schema=public
       JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:-dev-compose-access-secret-change-before-production}
       JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-dev-compose-refresh-secret-change-before-production}
       JWT_ACCESS_TTL: 15m
       JWT_REFRESH_TTL_DAYS: 7
-      WEB_ORIGIN: http://localhost:8081
+      WEB_ORIGIN: ${WEB_ORIGIN:-http://localhost:8081}
+      COOKIE_SECURE: ${COOKIE_SECURE:-true}
       PORT: 3000
     depends_on:
       postgres:
@@ -49,7 +50,7 @@ services:
     container_name: socialapp-web
     restart: unless-stopped
     ports:
-      - "8081:80"
+      - "${SOCIALAPP_WEB_PORT:-8081}:80"
     depends_on:
       api:
         condition: service_healthy
