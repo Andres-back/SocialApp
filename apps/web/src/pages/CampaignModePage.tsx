@@ -1,4 +1,4 @@
-import { ArrowLeft, CheckCircle2, Circle, ClipboardCheck, Edit3, LockKeyhole, MapPin, Play, RotateCcw, Search, Trash2, WifiOff } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, Circle, ClipboardCheck, Edit3, LockKeyhole, MapPin, Play, RotateCcw, Search, Trash2, UsersRound, WifiOff } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { PERMISSIONS, type ScreeningCampaignData, type ScreeningParticipantStatus } from '@socialapp/shared';
@@ -67,7 +67,7 @@ export function CampaignModePage() {
       const formRoute = `/brigadas/${item.id}/deportistas/${person.athleteId}`;
       return <article key={person.id} className="card flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:justify-between"><div className="flex items-center gap-3">{person.status === 'COMPLETED' ? <CheckCircle2 className="text-emerald-600"/> : person.status === 'IN_PROGRESS' ? <ClipboardCheck className="text-amber-600"/> : <Circle className="text-slate-300"/>}<div><p className="font-semibold text-pine-900">{person.athleteName}</p><p className="text-xs text-slate-500">{participantLabels[person.status]}{person.syncStatus && person.syncStatus !== 'synced' ? ' · Cambio local pendiente' : ''}</p></div></div><div className="flex gap-2">{person.status === 'COMPLETED' ? <Link to={resultRoute} className="btn-secondary min-h-10 px-3 py-2"><ClipboardCheck size={16}/> Ver resultado</Link> : canWrite && item.status === 'ACTIVE' ? <Link to={formRoute} className="btn-primary min-h-10 px-3 py-2"><Play size={16}/>{person.status === 'IN_PROGRESS' ? 'Continuar' : 'Aplicar'}</Link> : <span className="rounded-full bg-slate-100 px-3 py-2 text-xs font-semibold text-slate-500">{item.status === 'PLANNED' ? 'Jornada no iniciada' : 'Solo consulta'}</span>}</div></article>;
     })}</div>
-    {visible.length === 0 && <div className="card mt-4 p-10 text-center text-sm text-slate-500">No hay participantes que coincidan con el filtro.</div>}
+    {item.participants.length === 0 ? <div className="card mt-4 flex flex-col items-center p-10 text-center"><span className="grid h-14 w-14 place-items-center rounded-2xl bg-pine-50 text-pine-700"><UsersRound size={25}/></span><h2 className="mt-4 font-display text-2xl text-pine-900">Brigada lista para recibir población</h2><p className="mt-2 max-w-lg text-sm text-slate-500">Puedes conservarla vacía mientras organizas la jornada y añadir deportistas cuando estén confirmados.</p>{canWrite && <Link to={`/brigadas/${item.id}/editar`} className="btn-primary mt-5"><UsersRound size={17}/> Añadir deportistas</Link>}</div> : visible.length === 0 && <div className="card mt-4 p-10 text-center text-sm text-slate-500">No hay participantes que coincidan con el filtro.</div>}
   </div>;
 }
 

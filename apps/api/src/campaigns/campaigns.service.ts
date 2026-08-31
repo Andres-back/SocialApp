@@ -40,7 +40,6 @@ export class CampaignsService {
   }
   async upsert(userId: string, input: ScreeningCampaignInput, baseVersion: number): Promise<ScreeningCampaignData> {
     if (!input.id || !input.name || !input.date || !input.place || !input.instrumentId) throw new BadRequestException('Completa los datos obligatorios de la brigada.');
-    if (input.athleteIds.length === 0) throw new BadRequestException('Selecciona al menos un deportista para la brigada.');
     if (new Set(input.athleteIds).size !== input.athleteIds.length) throw new BadRequestException('La población asignada contiene deportistas duplicados.');
     const existing = await this.prisma.screeningCampaign.findUnique({ where: { id: input.id } });
     if (existing && existing.version !== baseVersion) throw new ConflictException('Existe una versión más reciente de la brigada.');

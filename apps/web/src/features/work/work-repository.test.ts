@@ -45,6 +45,16 @@ describe('offline social work repository', () => {
     expect(await db.syncQueue.where('entityType').equals('campaign').count()).toBe(1);
   });
 
+  it('creates a campaign without athletes so they can be assigned later', async () => {
+    const instrument: ScreeningInstrumentData = { id: crypto.randomUUID(), name: 'Preventivo', version: 1, active: true, questions: [] };
+    const input: ScreeningCampaignInput = { id: crypto.randomUUID(), name: 'Brigada abierta', date: '2026-08-30', place: 'Por definir', instrumentId: instrument.id, professionalName: 'Laura', athleteIds: [], status: 'PLANNED', version: 0 };
+
+    await saveCampaignOffline(input, instrument, {});
+
+    expect(await db.campaigns.get(input.id)).toMatchObject({ participants: [], athleteIds: [], status: 'PLANNED' });
+    expect(await db.syncQueue.where('entityType').equals('campaign').count()).toBe(1);
+  });
+
   it('keeps partial screening answers and coalesces pending mutations', async () => {
     const instrument: ScreeningInstrumentData = { id: crypto.randomUUID(), name: 'Preventivo', version: 1, active: true, questions: [{ id: 'q1', dimension: 'Apoyo', prompt: '¿Cuenta con apoyo?', type: 'YES_NO', options: ['Sí','No'], required: true, position: 1 }] };
     const athleteId = crypto.randomUUID();

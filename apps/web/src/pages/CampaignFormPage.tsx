@@ -63,7 +63,6 @@ export function CampaignFormPage() {
     setError('');
     const instrument = instruments.find((item) => item.id === values.instrumentId);
     if (!instrument) return setError('Selecciona el instrumento de la brigada.');
-    if (selected.length === 0) return setError('Selecciona al menos un deportista.');
     const incompatible = instrument.ageGroup && ['6 a 9 años', '10 a 13 años', '14 a 17 años'].includes(instrument.ageGroup)
       ? athletes.filter((athlete) => selected.includes(athlete.id) && !instrumentMatchesAge(instrument, athlete.age)) : [];
     if (incompatible.length > 0) return setError(`El instrumento ${instrument.ageGroup} no corresponde a la edad de: ${incompatible.map((athlete) => `${athlete.firstNames} ${athlete.lastNames} (${athlete.age})`).join(', ')}.`);
@@ -89,7 +88,7 @@ export function CampaignFormPage() {
   return <div className="mx-auto max-w-5xl">
     <Link to={existing ? `/brigadas/${existing.id}` : '/brigadas'} className="inline-flex items-center gap-2 text-sm font-semibold text-pine-700"><ArrowLeft size={17}/> Volver</Link>
     <h1 className="mt-5 font-display text-4xl text-pine-900">{existing ? 'Editar brigada' : 'Nueva brigada'}</h1>
-    <p className="mt-2 text-sm text-slate-500">Solo debes seleccionar el instrumento y al menos un deportista. Nombre, fecha y lugar pueden completarse después.</p>
+    <p className="mt-2 text-sm text-slate-500">Solo debes seleccionar el instrumento. Puedes crear la brigada sin deportistas y asignarlos después; nombre y lugar también pueden completarse más adelante.</p>
     {suggestion && <div className="mt-5 rounded-xl bg-blue-50 px-4 py-3 text-sm text-blue-800">{suggestion}</div>}
     {error && <div role="alert" className="mt-5 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
     <section className="card mt-6 grid gap-5 p-5 md:grid-cols-2 md:p-7">
@@ -103,7 +102,7 @@ export function CampaignFormPage() {
       <Field label="Profesional responsable"><input className="field bg-slate-50" value={existing?.professionalName ?? user?.displayName ?? ''} readOnly/></Field>
     </section>
     <section className="card mt-6 p-5 md:p-7">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between"><div><h2 className="font-display text-2xl text-pine-900">Seleccionar deportistas</h2><p className="text-sm text-slate-500">{selected.length} seleccionados · {filtered.length} visibles</p></div><button className="text-sm font-bold text-pine-700" onClick={() => setSelected(allFilteredSelected ? selected.filter((athleteId) => !filtered.some((item) => item.id === athleteId)) : Array.from(new Set([...selected, ...filtered.map((item) => item.id)])))}>{allFilteredSelected ? 'Quitar visibles' : 'Seleccionar visibles'}</button></div>
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between"><div><h2 className="font-display text-2xl text-pine-900">Añadir deportistas <span className="text-base font-sans font-medium text-slate-400">(opcional)</span></h2><p className="text-sm text-slate-500">{selected.length === 0 ? 'Ninguno por ahora; podrás asignarlos al editar la brigada.' : `${selected.length} seleccionados · ${filtered.length} visibles`}</p></div><button className="text-sm font-bold text-pine-700" onClick={() => setSelected(allFilteredSelected ? selected.filter((athleteId) => !filtered.some((item) => item.id === athleteId)) : Array.from(new Set([...selected, ...filtered.map((item) => item.id)])))}>{allFilteredSelected ? 'Quitar visibles' : 'Seleccionar visibles'}</button></div>
       <label className="relative mt-5 block"><Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18}/><span className="sr-only">Buscar población</span><input className="field pl-11" placeholder="Buscar por nombre o código…" value={search} onChange={(event) => setSearch(event.target.value)}/></label>
       <div className="mt-5 grid gap-3 sm:grid-cols-2">{filtered.map((item) => <label key={item.id} className="flex cursor-pointer items-center gap-3 rounded-xl border border-slate-200 p-4"><input type="checkbox" className="h-5 w-5 accent-pine-700" checked={selected.includes(item.id)} onChange={() => setSelected((current) => current.includes(item.id) ? current.filter((athleteId) => athleteId !== item.id) : [...current, item.id])}/><div><p className="font-semibold text-pine-900">{item.firstNames} {item.lastNames}</p><p className="text-xs text-slate-500">{item.internalCode} · {item.sportName} · {item.categoryName}</p></div></label>)}</div>
       {filtered.length === 0 && <p className="py-8 text-center text-sm text-slate-500">No hay deportistas que coincidan con los filtros.</p>}
