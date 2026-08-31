@@ -1,6 +1,11 @@
-import { ArrowDown, ArrowUp, BookOpenCheck, Edit3, Plus, RotateCcw, Save, Trash2 } from 'lucide-react';
-import { useEffect, useState } from 'react';
-import type { ScreeningInstrumentData, ScreeningInstrumentInput, ScreeningQuestionData } from '@socialapp/shared';
+import { ArrowDown, ArrowRight, ArrowUp, BookOpenCheck, Edit3, FileText, Home, Network, Plus, RotateCcw, Save, Search, ShieldAlert, StickyNote, Trash2, UsersRound, type LucideIcon } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import type { AthleteRecord, ScreeningInstrumentData, ScreeningInstrumentInput, ScreeningQuestionData } from '@socialapp/shared';
+import { loadAthletes } from '../features/athletes/athlete-repository';
+import { screeningInstrumentPath, SYSTEM_INSTRUMENTS, systemInstrumentPath, type SystemInstrumentKind } from '../features/instruments/instrument-catalog';
+import { useAuth } from '../features/auth/useAuth';
+import { loadInstruments } from '../features/work/work-repository';
 import { api } from '../lib/api';
 
 const ageGroups = ['6 a 9 años', '10 a 13 años', '14 a 17 años'];
@@ -12,6 +17,10 @@ const types: Array<{ value: ScreeningQuestionData['type']; label: string }> = [
   { value: 'TEXT', label: 'Texto libre' },
   { value: 'NUMBER', label: 'Número' },
 ];
+const systemIcons: Record<SystemInstrumentKind, LucideIcon> = {
+  'social-record': FileText, 'socioeconomic-assessment': Home, 'alert-assessment': ShieldAlert,
+  'social-follow-up': BookOpenCheck, 'professional-observation': StickyNote, genogram: UsersRound, ecomap: Network,
+};
 
 type EditableQuestion = Omit<ScreeningQuestionData, 'position'> & { optionsText: string };
 
@@ -20,7 +29,14 @@ function blankQuestion(): EditableQuestion {
 }
 
 export function InstrumentsPage() {
+  const { can } = useAuth();
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const requestedAthleteId = searchParams.get('athleteId') ?? '';
   const [items, setItems] = useState<ScreeningInstrumentData[]>([]);
+  const [athletes, setAthletes] = useState<AthleteRecord[]>([]);
+  const [athleteSearch, setAthleteSearch] = useState('');
+  const [selectedAthleteId, setSelectedAthleteId] = useState(requestedAthleteId);
   const [editing, setEditing] = useState<ScreeningInstrumentData>();
   const [name, setName] = useState('');
   const [ageGroup, setAgeGroup] = useState(ageGroups[0]!);
@@ -30,8 +46,26 @@ export function InstrumentsPage() {
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
 
-  async function load() { setItems(await api.manageableInstruments()); }
-  useEffect(() => { void load().catch((reason) => setError(reason instanceof Error ? reason.message : 'No fue posible cargar los instrumentos.')); }, []);
+  const load = useCallback(async () => {
+    const [forms, people] = await Promise.all([api.manageableInstruments().catch(() => loadInstruments()), loadAthletes()]);
+    setItems(forms); setAthletes(people);
+    if (requestedAthleteId && people.some((person) => person.id === requestedAthleteId)) setSelectedAthleteId(requestedAthleteId);
+  }, [requestedAthleteId]);
+  useEffect(() => { void load().catch((reason) => setError(reason instanceof Error ? reason.message : 'No fue posible cargar los instrumentos.')); }, [load]);
+  const visibleAthletes = useMemo(() => {
+    const term = athleteSearch.trim().toLocaleLowerCase('es');
+    return athletes.filter((person) => !term || `${person.firstNames} ${person.lastNames} ${person.internalCode}`.toLocaleLowerCase('es').includes(term));
+  }, [athletes, athleteSearch]);
+  const selectedAthlete = athletes.find((person) => person.id === selectedAthleteId);
+  const availableSystemInstruments = SYSTEM_INSTRUMENTS.filter((instrument) => can(instrument.permission));
+  function requireAthlete(): string | undefined {
+    if (selectedAthleteId) return selectedAthleteId;
+    setError('Selecciona primero el deportista al que aplicarás el instrumento.');
+    document.getElementById('seleccionar-deportista')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    return undefined;
+  }
+  function applySystem(kind: SystemInstrumentKind) { const athleteId = requireAthlete(); if (athleteId) navigate(systemInstrumentPath(kind, athleteId)); }
+  function applyScreening(instrumentId: string) { const athleteId = requireAthlete(); if (athleteId) navigate(screeningInstrumentPath(instrumentId, athleteId)); }
 
   function beginCreate() {
     setEditing(undefined); setName(''); setAgeGroup(ageGroups[0]!); setQuestions([blankQuestion()]); setError(''); setOpen(true);
@@ -73,9 +107,17 @@ export function InstrumentsPage() {
   }
 
   return <div>
-    <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between"><div><p className="text-sm font-bold text-coral-600">Configuración de tamizajes</p><h1 className="font-display text-4xl text-pine-900">Instrumentos</h1><p className="mt-2 max-w-3xl text-sm text-slate-500">Crea y actualiza los cuestionarios que se seleccionan al preparar una brigada. Al editar se genera una nueva versión para conservar intactos los resultados anteriores.</p></div><button className="btn-primary shrink-0" onClick={beginCreate}><Plus size={18}/> Nuevo instrumento</button></div>
+    <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between"><div><p className="text-sm font-bold text-coral-600">Centro de aplicación</p><h1 className="font-display text-4xl text-pine-900">Instrumentos</h1><p className="mt-2 max-w-3xl text-sm text-slate-500">Todos los formularios de Trabajo Social se aplican desde aquí. El registro de deportistas permanece separado para agilizar el ingreso de la población.</p></div><button className="btn-primary shrink-0" onClick={beginCreate}><Plus size={18}/> Nuevo cuestionario</button></div>
     {message && <div className="mt-5 rounded-xl bg-emerald-50 px-4 py-3 text-sm text-emerald-800">{message}</div>}
     {error && <div role="alert" className="mt-5 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
+    <section id="seleccionar-deportista" className="card mt-6 p-5 md:p-7">
+      <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between"><div><p className="eyebrow">Paso 1</p><h2 className="mt-1 font-display text-3xl text-pine-900">Selecciona el deportista</h2><p className="mt-1 text-sm text-slate-500">Las respuestas quedarán vinculadas automáticamente a su expediente.</p></div>{selectedAthlete && <div className="rounded-xl bg-emerald-50 px-4 py-3 text-sm text-emerald-800"><strong>{selectedAthlete.firstNames} {selectedAthlete.lastNames}</strong><span className="ml-2 text-emerald-600">{selectedAthlete.internalCode}</span></div>}</div>
+      <label className="relative mt-5 block"><Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18}/><span className="sr-only">Buscar deportista</span><input className="field pl-11" placeholder="Buscar por nombre o código…" value={athleteSearch} onChange={(event) => setAthleteSearch(event.target.value)}/></label>
+      <div className="mt-4 grid max-h-64 gap-2 overflow-y-auto sm:grid-cols-2 lg:grid-cols-3">{visibleAthletes.map((person) => <button key={person.id} type="button" onClick={() => { setSelectedAthleteId(person.id); setError(''); }} className={`rounded-xl border p-3 text-left transition ${selectedAthleteId === person.id ? 'border-pine-600 bg-pine-50 ring-2 ring-pine-100' : 'border-slate-200 bg-white hover:border-pine-200'}`}><span className="block text-sm font-semibold text-pine-900">{person.firstNames} {person.lastNames}</span><span className="mt-1 block text-xs text-slate-500">{person.internalCode} · {person.age} años · {person.sportName}</span></button>)}</div>
+      {visibleAthletes.length === 0 && <p className="py-8 text-center text-sm text-slate-500">No encontramos deportistas con esa búsqueda.</p>}
+    </section>
+    <section className="mt-8"><div><p className="eyebrow">Paso 2</p><h2 className="mt-1 font-display text-3xl text-pine-900">Instrumentos institucionales</h2><p className="mt-2 text-sm text-slate-500">Selecciona el formulario que deseas diligenciar o actualizar.</p></div><div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-3">{availableSystemInstruments.map((instrument) => { const Icon = systemIcons[instrument.kind]; return <article key={instrument.kind} className="card flex flex-col p-5"><div className="flex items-start justify-between gap-3"><span className="grid h-11 w-11 place-items-center rounded-xl bg-pine-50 text-pine-700"><Icon size={21}/></span><span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-500">v{instrument.version}</span></div><p className="mt-4 text-xs font-bold uppercase tracking-wide text-coral-600">{instrument.area}</p><h3 className="mt-1 text-lg font-bold text-pine-900">{instrument.name}</h3><p className="mt-2 flex-1 text-sm leading-6 text-slate-500">{instrument.description}</p><button className="btn-primary mt-5 w-full" onClick={() => applySystem(instrument.kind)}>Aplicar <ArrowRight size={17}/></button></article>; })}</div></section>
+    <section className="mt-9"><div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between"><div><p className="eyebrow">Cuestionarios configurables</p><h2 className="mt-1 font-display text-3xl text-pine-900">Tamizajes y entrevistas</h2><p className="mt-2 max-w-3xl text-sm text-slate-500">Puedes aplicarlos individualmente o incluirlos en una brigada. Al editar se crea una versión nueva y los resultados anteriores permanecen intactos.</p></div><button className="btn-secondary shrink-0" onClick={beginCreate}><Plus size={18}/> Crear cuestionario</button></div></section>
     {open && <section className="card mt-6 p-5 md:p-7">
       <div className="flex flex-wrap items-start justify-between gap-3"><div><p className="text-xs font-bold uppercase tracking-wide text-coral-600">{editing ? `Editar ${editing.name} v${editing.version}` : 'Nuevo cuestionario'}</p><h2 className="mt-1 font-display text-3xl text-pine-900">{editing ? 'Crear nueva versión' : 'Configurar instrumento'}</h2></div><button className="btn-secondary" onClick={() => setOpen(false)}>Cancelar</button></div>
       <div className="mt-6 grid gap-4 md:grid-cols-2"><label><span className="mb-2 block text-sm font-semibold text-slate-700">Nombre *</span><input className="field" value={name} onChange={(event) => setName(event.target.value)}/></label><label><span className="mb-2 block text-sm font-semibold text-slate-700">Rango de edad *</span><select className="field" value={ageGroup} onChange={(event) => setAgeGroup(event.target.value)}>{ageGroups.map((group) => <option key={group}>{group}</option>)}</select></label></div>
@@ -86,6 +128,6 @@ export function InstrumentsPage() {
       </article>)}</div>
       <button className="btn-primary mt-6 w-full" disabled={saving} onClick={() => void save()}><Save size={18}/> {saving ? 'Guardando…' : editing ? 'Crear nueva versión' : 'Guardar instrumento'}</button>
     </section>}
-    <div className="mt-6 grid gap-4 lg:grid-cols-2">{items.map((item) => <article key={item.id} className={`card p-5 ${item.active ? '' : 'opacity-70'}`}><div className="flex items-start justify-between gap-3"><div className="flex gap-3"><div className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-pine-50 text-pine-700"><BookOpenCheck size={21}/></div><div><h2 className="font-semibold text-pine-900">{item.name} v{item.version}</h2><p className="mt-1 text-xs text-slate-500">{item.ageGroup || 'Sin rango de edad'} · {item.questions.length} {item.questions.length === 1 ? 'pregunta' : 'preguntas'} · {item.active ? 'Disponible' : 'Retirado'}</p></div></div><span className={`rounded-full px-3 py-1 text-xs font-bold ${item.active ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>{item.active ? 'Activo' : 'Histórico'}</span></div><div className="mt-5 flex flex-wrap gap-2"><button className="btn-secondary min-h-10 px-3 py-2" onClick={() => beginEdit(item)}><Edit3 size={16}/> Editar</button><button className="btn-secondary min-h-10 px-3 py-2" onClick={() => void toggle(item)}><RotateCcw size={16}/> {item.active ? 'Retirar' : 'Reactivar'}</button></div></article>)}</div>
+    <div className="mt-6 grid gap-4 lg:grid-cols-2">{items.map((item) => <article key={item.id} className={`card p-5 ${item.active ? '' : 'opacity-70'}`}><div className="flex items-start justify-between gap-3"><div className="flex gap-3"><div className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-pine-50 text-pine-700"><BookOpenCheck size={21}/></div><div><h2 className="font-semibold text-pine-900">{item.name} v{item.version}</h2><p className="mt-1 text-xs text-slate-500">{item.ageGroup || 'Sin rango de edad'} · {item.questions.length} {item.questions.length === 1 ? 'pregunta' : 'preguntas'} · {item.active ? 'Disponible' : 'Retirado'}</p></div></div><span className={`rounded-full px-3 py-1 text-xs font-bold ${item.active ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>{item.active ? 'Activo' : 'Histórico'}</span></div><div className="mt-5 flex flex-wrap gap-2">{item.active && <button className="btn-primary min-h-10 px-3 py-2" onClick={() => applyScreening(item.id)}>Aplicar <ArrowRight size={16}/></button>}<button className="btn-secondary min-h-10 px-3 py-2" onClick={() => beginEdit(item)}><Edit3 size={16}/> Editar</button><button className="btn-secondary min-h-10 px-3 py-2" onClick={() => void toggle(item)}><RotateCcw size={16}/> {item.active ? 'Retirar' : 'Reactivar'}</button></div></article>)}</div>
   </div>;
 }

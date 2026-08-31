@@ -10,9 +10,9 @@ import { api } from '../lib/api';
 const actions = [
   { label: 'Consultar deportistas', description: 'Busca y revisa expedientes', icon: Search, to: '/deportistas', permission: PERMISSIONS.ATHLETE_READ },
   { label: 'Nuevo deportista', description: 'Registra una nueva vinculación', icon: UserPlus, to: '/deportistas/nuevo', permission: PERMISSIONS.ATHLETE_WRITE },
-  { label: 'Nueva ficha social', description: 'Completa información familiar', icon: ClipboardPlus, to: '/trabajo-social', permission: PERMISSIONS.SOCIAL_RECORD_WRITE },
-  { label: 'Iniciar tamizaje', description: 'Trabaja una brigada en campo', icon: ShieldPlus, to: '/brigadas', permission: PERMISSIONS.SCREENING_WRITE },
-  { label: 'Registrar seguimiento', description: 'Documenta una intervención', icon: CalendarClock, to: '/trabajo-social', permission: PERMISSIONS.FOLLOW_UP_WRITE },
+  { label: 'Aplicar instrumento', description: 'Fichas, entrevistas y valoración', icon: ClipboardPlus, to: '/instrumentos', permission: PERMISSIONS.SOCIAL_RECORD_WRITE },
+  { label: 'Iniciar tamizaje', description: 'Selecciona instrumento y deportista', icon: ShieldPlus, to: '/instrumentos', permission: PERMISSIONS.SCREENING_WRITE },
+  { label: 'Registrar seguimiento', description: 'Aplica el instrumento de intervención', icon: CalendarClock, to: '/instrumentos', permission: PERMISSIONS.FOLLOW_UP_WRITE },
 ];
 
 export function DashboardPage() {
@@ -61,7 +61,7 @@ export function DashboardPage() {
             <p className="mt-3 max-w-2xl text-sm leading-6 text-pine-100 md:text-base">Tu espacio está listo para acompañar a cada deportista, organizar las fichas y continuar el trabajo incluso sin conexión.</p>
             <div className="mt-7 flex flex-wrap gap-3">
               {can(PERMISSIONS.ATHLETE_WRITE) && <Link to="/deportistas/nuevo" className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-white px-4 py-2.5 text-sm font-bold text-pine-800 shadow-lg transition hover:-translate-y-0.5 hover:bg-sand-50"><UserPlus size={18} /> Registrar deportista</Link>}
-              {can(PERMISSIONS.SOCIAL_RECORD_WRITE) && <Link to="/trabajo-social" className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-white/20 bg-white/10 px-4 py-2.5 text-sm font-semibold text-white backdrop-blur transition hover:bg-white/15"><ClipboardPlus size={18} /> Abrir ficha social</Link>}
+              {can(PERMISSIONS.SOCIAL_RECORD_WRITE) && <Link to="/instrumentos" className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-white/20 bg-white/10 px-4 py-2.5 text-sm font-semibold text-white backdrop-blur transition hover:bg-white/15"><ClipboardPlus size={18} /> Aplicar instrumento</Link>}
             </div>
           </div>
           <Link to="/sincronizacion" className="group flex min-w-[230px] items-center gap-4 rounded-2xl border border-white/15 bg-pine-950/20 p-4 backdrop-blur-md transition hover:bg-pine-950/30">

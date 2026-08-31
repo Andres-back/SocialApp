@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, ArrowLeft, CalendarPlus, CheckCircle2, CircleDot, Plus, Save, ShieldCheck, StickyNote } from 'lucide-react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useParams, useSearchParams } from 'react-router-dom';
 import type { AlertData, AthleteRecord, AthleteWorkspace, FollowUpCaseInput, FollowUpEntryInput, ProfessionalObservationData } from '@socialapp/shared';
 import { useAuth } from '../features/auth/useAuth';
 import { loadAthlete } from '../features/athletes/athlete-repository';
@@ -9,7 +9,7 @@ import { loadWorkspace, saveAlertOffline, saveFollowUpEntryOffline, saveFollowUp
 type Tab = 'alerts' | 'followups' | 'observations' | 'timeline';
 const emptyWorkspace: AthleteWorkspace = { socioeconomicAssessment: null, alerts: [], followUps: [], observations: [], genogram: null, ecomap: null, timeline: [] };
 export function AthleteWorkPage() {
-  const { id = '' } = useParams(); const { user } = useAuth(); const [athlete, setAthlete] = useState<AthleteRecord>(); const [workspace, setWorkspace] = useState(emptyWorkspace); const [tab, setTab] = useState<Tab>('alerts'); const [message, setMessage] = useState('');
+  const { id = '' } = useParams(); const [searchParams] = useSearchParams(); const requestedTab = searchParams.get('tab') as Tab | null; const startNew = searchParams.get('new') === '1'; const { user } = useAuth(); const [athlete, setAthlete] = useState<AthleteRecord>(); const [workspace, setWorkspace] = useState(emptyWorkspace); const [tab, setTab] = useState<Tab>(requestedTab && ['alerts', 'followups', 'observations', 'timeline'].includes(requestedTab) ? requestedTab : 'alerts'); const [message, setMessage] = useState('');
   useEffect(() => { Promise.all([loadAthlete(id), loadWorkspace(id)]).then(([person, data]) => { setAthlete(person); setWorkspace(data); }); }, [id]);
   async function refresh(text: string) { setWorkspace(await loadWorkspace(id)); setMessage(text); }
   return <div>
@@ -17,15 +17,15 @@ export function AthleteWorkPage() {
     <header className="mt-5 rounded-3xl bg-pine-800 p-6 text-white md:p-8"><p className="text-sm text-pine-100">Trabajo Social</p><h1 className="mt-1 font-display text-4xl">{athlete ? `${athlete.firstNames} ${athlete.lastNames}` : 'Expediente social'}</h1><p className="mt-2 text-sm text-pine-100">Alertas, seguimientos, observaciones y trazabilidad en un solo lugar.</p></header>
     {message && <div className="mt-5 flex items-center gap-2 rounded-xl bg-emerald-50 p-4 text-sm text-emerald-800"><CheckCircle2 size={18}/>{message}</div>}
     <div className="mt-6 flex gap-2 overflow-x-auto pb-2">{([['alerts','Alertas'],['followups','Seguimientos'],['observations','Observaciones'],['timeline','Historial']] as [Tab,string][]).map(([value,label]) => <button key={value} onClick={() => setTab(value)} className={`min-h-11 shrink-0 rounded-xl px-4 text-sm font-semibold ${tab === value ? 'bg-pine-800 text-white' : 'bg-white text-pine-800'}`}>{label}</button>)}</div>
-    {tab === 'alerts' && <Alerts athleteId={id} alerts={workspace.alerts} onSaved={() => refresh('Alerta actualizada.')} />}
-    {tab === 'followups' && <FollowUps athleteId={id} items={workspace.followUps} professional={user?.displayName ?? 'Trabajo Social'} onSaved={() => refresh('Seguimiento guardado.')} />}
+    {tab === 'alerts' && <Alerts athleteId={id} alerts={workspace.alerts} startOpen={startNew} onSaved={() => refresh('Alerta actualizada.')} />}
+    {tab === 'followups' && <FollowUps athleteId={id} items={workspace.followUps} startOpen={startNew} professional={user?.displayName ?? 'Trabajo Social'} onSaved={() => refresh('Seguimiento guardado.')} />}
     {tab === 'observations' && <Observations athleteId={id} items={workspace.observations} professional={user?.displayName ?? 'Trabajo Social'} onSaved={() => refresh('Observación guardada.')} />}
     {tab === 'timeline' && <Timeline workspace={workspace}/>}
   </div>;
 }
 
-function Alerts({ athleteId, alerts, onSaved }: { athleteId: string; alerts: AlertData[]; onSaved: () => Promise<void> }) {
-  const [manual, setManual] = useState(false); const [indicator, setIndicator] = useState(''); const [informed, setInformed] = useState(''); const [level, setLevel] = useState<AlertData['level']>('YELLOW');
+function Alerts({ athleteId, alerts, startOpen, onSaved }: { athleteId: string; alerts: AlertData[]; startOpen: boolean; onSaved: () => Promise<void> }) {
+  const [manual, setManual] = useState(startOpen); const [indicator, setIndicator] = useState(''); const [informed, setInformed] = useState(''); const [level, setLevel] = useState<AlertData['level']>('YELLOW');
   async function add() { if (!indicator.trim()) return; const now = new Date().toISOString(); await saveAlertOffline({ id: crypto.randomUUID(), athleteId, sourceType: 'PROFESSIONAL', sourceId: null, level, status: 'PENDING', informedData: informed, automaticIndicator: indicator, professionalAssessment: null, createdAt: now, updatedAt: now, version: 0 }); setManual(false); setIndicator(''); await onSaved(); }
   return <section className="mt-5">
     <div className="flex items-center justify-between"><div><h2 className="font-display text-3xl text-pine-900">Alertas para valorar</h2><p className="mt-1 text-sm text-slate-500">El indicador automático nunca reemplaza la valoración profesional.</p></div><button className="btn-secondary px-4" onClick={() => setManual(!manual)}><Plus size={17}/> Nueva</button></div>
@@ -40,8 +40,8 @@ function AlertCard({ alert, onSaved }: { alert: AlertData; onSaved: () => Promis
   return <article className={`rounded-2xl border p-5 ${tone}`}><div className="flex flex-wrap justify-between gap-3"><div><p className="text-xs font-bold uppercase tracking-wide">{alert.level === 'RED' ? 'Prioritaria' : alert.level === 'YELLOW' ? 'Preventiva' : 'Sin indicador relevante'}</p><h3 className="mt-1 font-semibold text-slate-800">{alert.automaticIndicator}</h3></div><span className="rounded-full bg-white px-3 py-1 text-xs font-semibold">{alert.status === 'PENDING' ? 'Pendiente' : alert.status === 'CONFIRMED' ? 'Confirmada' : 'Descartada'}</span></div><div className="mt-4 grid gap-4 md:grid-cols-2"><div className="rounded-xl bg-white/80 p-4"><p className="text-xs font-bold text-slate-400">DATO INFORMADO</p><p className="mt-2 text-sm">{alert.informedData || 'Sin texto informado asociado.'}</p></div><label className="rounded-xl bg-white/80 p-4"><span className="text-xs font-bold text-slate-400">VALORACIÓN PROFESIONAL</span><textarea className="field mt-2 py-2" rows={3} value={assessment} onChange={(e) => setAssessment(e.target.value)}/></label></div><div className="mt-4 flex flex-wrap gap-3"><button className="btn-primary min-h-10 py-2" onClick={() => void review('CONFIRMED')}><ShieldCheck size={16}/> Confirmar</button><button className="btn-secondary min-h-10 py-2" onClick={() => void review('DISMISSED')}>Descartar</button></div></article>;
 }
 
-function FollowUps({ athleteId, items, professional, onSaved }: { athleteId: string; items: AthleteWorkspace['followUps']; professional: string; onSaved: () => Promise<void> }) {
-  const [open, setOpen] = useState(false); const [motive, setMotive] = useState(''); const [priority, setPriority] = useState<FollowUpCaseInput['priority']>('MEDIUM'); const [date, setDate] = useState('');
+function FollowUps({ athleteId, items, startOpen, professional, onSaved }: { athleteId: string; items: AthleteWorkspace['followUps']; startOpen: boolean; professional: string; onSaved: () => Promise<void> }) {
+  const [open, setOpen] = useState(startOpen); const [motive, setMotive] = useState(''); const [priority, setPriority] = useState<FollowUpCaseInput['priority']>('MEDIUM'); const [date, setDate] = useState('');
   async function add() { if (!motive.trim()) return; await saveFollowUpOffline({ id: crypto.randomUUID(), athleteId, motive, priority, status: 'OPEN', responsible: professional, nextAction: 'Contactar familia o red de apoyo', estimatedDate: date || null, version: 0 }); setOpen(false); setMotive(''); await onSaved(); }
   return <section className="mt-5"><div className="flex items-center justify-between"><div><h2 className="font-display text-3xl text-pine-900">Seguimientos</h2><p className="text-sm text-slate-500">Casos, acuerdos, próximas acciones e intervenciones.</p></div><button className="btn-primary px-4" onClick={() => setOpen(!open)}><CalendarPlus size={17}/> Nuevo</button></div>
     {open && <div className="card mt-5 grid gap-4 p-5 md:grid-cols-2"><Field label="Motivo"><input className="field" value={motive} onChange={(e) => setMotive(e.target.value)}/></Field><Select value={priority} onChange={(v) => setPriority(v as FollowUpCaseInput['priority'])} options={[['LOW','Baja'],['MEDIUM','Media'],['HIGH','Alta']]}/><Field label="Próxima fecha"><input type="date" className="field" value={date} onChange={(e) => setDate(e.target.value)}/></Field><button className="btn-primary self-end" onClick={() => void add()}><Save size={17}/> Crear seguimiento</button></div>}

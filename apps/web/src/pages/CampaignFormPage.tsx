@@ -17,6 +17,7 @@ export function CampaignFormPage() {
   const { id } = useParams();
   const [searchParams] = useSearchParams();
   const requestedAthleteId = searchParams.get('athleteId');
+  const requestedInstrumentId = searchParams.get('instrumentId');
   const { user } = useAuth();
   const navigate = useNavigate();
   const [athletes, setAthletes] = useState<AthleteRecord[]>([]);
@@ -41,15 +42,16 @@ export function CampaignFormPage() {
       } else {
         setCatalogs(cats);
         const requested = people.find((athlete) => athlete.id === requestedAthleteId);
-        const matchedInstrument = requested ? forms.find((instrument) => instrumentMatchesAge(instrument, requested.age)) : undefined;
+        const requestedInstrument = forms.find((instrument) => instrument.id === requestedInstrumentId);
+        const matchedInstrument = requestedInstrument ?? (requested ? forms.find((instrument) => instrumentMatchesAge(instrument, requested.age)) : undefined);
         if (requested) {
           setSelected([requested.id]);
           setValues((state) => ({ ...state, name: `Tamizaje por edad - ${requested.firstNames} ${requested.lastNames}`, place: requested.municipality, programId: requested.sportsProgramId, sportId: requested.sportId, instrumentId: matchedInstrument?.id ?? forms[0]?.id ?? '' }));
-          setSuggestion(matchedInstrument ? `${matchedInstrument.name} seleccionado automáticamente para ${requested.age} años.` : `No hay un instrumento activo configurado para ${requested.age} años.`);
-        } else if (forms[0]) setValues((state) => ({ ...state, instrumentId: forms[0]!.id }));
+          setSuggestion(matchedInstrument ? `${matchedInstrument.name} seleccionado para ${requested.age} años.` : `No hay un instrumento activo configurado para ${requested.age} años.`);
+        } else if (requestedInstrument ?? forms[0]) setValues((state) => ({ ...state, instrumentId: (requestedInstrument ?? forms[0])!.id }));
       }
     });
-  }, [id, requestedAthleteId]);
+  }, [id, requestedAthleteId, requestedInstrumentId]);
 
   const filtered = useMemo(() => {
     const term = search.trim().toLocaleLowerCase('es');
