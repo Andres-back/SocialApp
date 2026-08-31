@@ -3,6 +3,21 @@ import type { ScreeningCampaignInput } from '@socialapp/shared';
 import { CampaignsService } from './campaigns.service';
 
 describe('CampaignsService', () => {
+  it('treats deleting an already deleted campaign as a successful idempotent operation', async () => {
+    const prisma = {
+      screeningCampaign: {
+        findUnique: vi.fn().mockResolvedValue({ id: '11111111-1111-1111-1111-111111111111', deletedAt: new Date() }),
+        update: vi.fn(),
+      },
+    };
+    const audit = { record: vi.fn() };
+    const service = new CampaignsService(prisma as never, audit as never);
+
+    await expect(service.remove('33333333-3333-3333-3333-333333333333', '11111111-1111-1111-1111-111111111111')).resolves.toEqual({ success: true, alreadyDeleted: true });
+    expect(prisma.screeningCampaign.update).not.toHaveBeenCalled();
+    expect(audit.record).not.toHaveBeenCalled();
+  });
+
   it('creates a planned campaign without athletes', async () => {
     const input: ScreeningCampaignInput = {
       id: '11111111-1111-1111-1111-111111111111',

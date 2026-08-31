@@ -6,7 +6,7 @@ export default defineConfig({
   plugins: [
     react(),
     VitePWA({
-      registerType: 'prompt',
+      registerType: 'autoUpdate',
       includeAssets: ['app-icon.svg'],
       devOptions: { enabled: true },
       manifest: {
@@ -26,6 +26,8 @@ export default defineConfig({
       workbox: {
         navigateFallback: '/index.html',
         cleanupOutdatedCaches: true,
+        skipWaiting: true,
+        clientsClaim: true,
         runtimeCaching: [
           {
             urlPattern: ({ request }) => request.destination === 'font',
@@ -41,4 +43,3 @@ export default defineConfig({
   ],
   server: { port: 5173 },
 });
-

@@ -1,5 +1,5 @@
 import type { AlertData, AthleteWorkspace, FollowUpCaseData, FollowUpCaseInput, FollowUpEntryInput, NetworkDiagramData, ProfessionalObservationData, ScreeningCampaignData, ScreeningCampaignInput, ScreeningInstrumentData, SocioeconomicAssessmentData, SocioeconomicAssessmentInput } from '@socialapp/shared';
-import { api } from '../../lib/api';
+import { api, ApiRequestError } from '../../lib/api';
 import { db, type LocalMutation } from '../../lib/db';
 import { synchronize } from '../../lib/sync-engine';
 import { createId } from '../../lib/uuid';
@@ -8,6 +8,13 @@ async function queue(entityType: string, entityId: string, payload: unknown, bas
   await db.syncQueue.put({ mutationId: createId(), entityType, entityId, operation, baseVersion, occurredAt: new Date().toISOString(), payload, status: 'pending', attempts: 0 });
 }
 function syncSoon() { if (navigator.onLine) void synchronize().catch(() => undefined); }
+
+function belongsToCampaign(mutation: LocalMutation, campaignId: string, participantIds: Set<string>): boolean {
+  if (mutation.entityType === 'campaign') return mutation.entityId === campaignId;
+  if (mutation.entityType !== 'screening-result') return false;
+  const payloadCampaignId = (mutation.payload as { campaignId?: string } | null)?.campaignId;
+  return payloadCampaignId === campaignId || participantIds.has(mutation.entityId);
+}
 
 export async function loadWorkspace(athleteId: string): Promise<AthleteWorkspace> {
   if (navigator.onLine) {
@@ -87,16 +94,24 @@ export async function loadCampaigns(): Promise<ScreeningCampaignData[]> {
     const pending = new Map(local.filter((item) => dirtyCampaignIds.has(item.id)).map((item) => [item.id, item]));
     const remote = data.map((item) => ({ ...item, participants: item.participants.map((participant) => ({ ...participant, syncStatus: 'synced' as const })), syncStatus: 'synced' as const }));
     const remoteIds = new Set(remote.map((item) => item.id));
-    const staleIds = local
-      .filter((item) => !remoteIds.has(item.id) && !dirtyCampaignIds.has(item.id) && (!item.syncStatus || item.syncStatus === 'synced'))
-      .map((item) => item.id);
-    await db.transaction('rw', db.campaigns, async () => {
+    const orphaned = local.filter((item) => !remoteIds.has(item.id) && item.version > 0);
+    const orphanedIds = new Set(orphaned.map((item) => item.id));
+    const orphanedParticipants = new Map(orphaned.map((item) => [item.id, new Set(item.participants.map((participant) => participant.id))]));
+    const orphanedMutations = queued.filter((mutation) => [...orphanedParticipants].some(([campaignId, participants]) => belongsToCampaign(mutation, campaignId, participants)));
+    await db.transaction('rw', db.campaigns, db.syncQueue, async () => {
       await db.campaigns.bulkPut(remote.filter((item) => !pending.has(item.id)));
-      await db.campaigns.bulkDelete(staleIds);
+      for (const campaign of orphaned) await db.campaigns.update(campaign.id, { syncStatus: 'conflict' });
+      for (const mutation of orphanedMutations) {
+        await db.syncQueue.update(mutation.mutationId, {
+          status: 'conflict',
+          rejectionKind: 'server',
+          lastError: 'Esta brigada fue eliminada en el servidor. La copia local se conservó y ya no se enviará automáticamente.',
+        });
+      }
     });
     return [
       ...remote.map((item) => pending.get(item.id) ?? item),
-      ...local.filter((item) => !remoteIds.has(item.id) && !staleIds.includes(item.id)),
+      ...local.filter((item) => !remoteIds.has(item.id) && !orphanedIds.has(item.id)),
     ].sort((a, b) => b.date.localeCompare(a.date));
   } catch { /* offline */ }
   return db.campaigns.orderBy('date').reverse().toArray();
@@ -167,6 +182,18 @@ export async function changeCampaignStatusOffline(campaign: ScreeningCampaignDat
 
 export async function deleteCampaignOnline(id: string): Promise<void> {
   if (!navigator.onLine) throw new Error('Conéctate para eliminar una brigada de forma segura.');
-  await api.deleteCampaign(id);
+  const local = await db.campaigns.get(id);
+  const participantIds = new Set(local?.participants.map((participant) => participant.id) ?? []);
+  let unsynchronized = (await db.syncQueue.toArray()).filter((mutation) => belongsToCampaign(mutation, id, participantIds));
+  if (unsynchronized.length > 0) {
+    try { await synchronize(); } catch { /* The queue remains preserved. */ }
+    unsynchronized = (await db.syncQueue.toArray()).filter((mutation) => belongsToCampaign(mutation, id, participantIds));
+  }
+  if (unsynchronized.length > 0) throw new Error('Esta brigada tiene cambios sin sincronizar. Resuélvelos en Sincronización antes de eliminarla.');
+  try {
+    await api.deleteCampaign(id);
+  } catch (error) {
+    if (!(error instanceof ApiRequestError) || error.status !== 404) throw error;
+  }
   await db.campaigns.delete(id);
 }

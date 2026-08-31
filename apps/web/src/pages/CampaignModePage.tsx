@@ -14,17 +14,20 @@ export function CampaignModePage() {
   const navigate = useNavigate();
   const online = useConnection();
   const [item, setItem] = useState<ScreeningCampaignData>();
+  const [loaded, setLoaded] = useState(false);
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState<'ALL' | ScreeningParticipantStatus>('ALL');
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
-  useEffect(() => { loadCampaigns().then((items) => setItem(items.find((campaign) => campaign.id === id))); }, [id, online]);
+  useEffect(() => { setLoaded(false); loadCampaigns().then((items) => setItem(items.find((campaign) => campaign.id === id))).finally(() => setLoaded(true)); }, [id, online]);
   const visible = useMemo(() => {
     if (!item) return [];
     const term = search.trim().toLocaleLowerCase('es');
     return item.participants.filter((person) => (status === 'ALL' || person.status === status) && (!term || person.athleteName.toLocaleLowerCase('es').includes(term)));
   }, [item, search, status]);
-  if (!item) return <div className="p-12 text-center text-sm text-slate-500">Preparando modo brigada…</div>;
+  if (!item) return loaded
+    ? <div className="card p-10 text-center"><h1 className="font-display text-3xl text-pine-900">Esta brigada ya no está disponible</h1><p className="mt-2 text-sm text-slate-500">Pudo ser eliminada por otra persona. La lista local ya fue actualizada.</p><Link to="/brigadas" className="btn-primary mt-6">Volver a brigadas</Link></div>
+    : <div className="p-12 text-center text-sm text-slate-500">Preparando modo brigada…</div>;
   const completed = item.participants.filter((person) => person.status === 'COMPLETED').length;
   const inProgress = item.participants.filter((person) => person.status === 'IN_PROGRESS').length;
   const canWrite = can(PERMISSIONS.SCREENING_WRITE);

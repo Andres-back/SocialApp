@@ -67,7 +67,7 @@ describe('offline social work repository', () => {
     expect(await db.syncQueue.where('entityType').equals('screening-result').count()).toBe(1);
   });
 
-  it('removes a stale synced campaign after it was deleted on the server', async () => {
+  it('hides a campaign deleted on the server while preserving its local copy', async () => {
     const campaign = {
       id: crypto.randomUUID(), name: 'Brigada retirada', date: '2026-08-27', place: 'Lugar QA', instrumentId: crypto.randomUUID(),
       professionalName: 'Laura', athleteIds: [], status: 'ACTIVE', version: 1,
@@ -79,7 +79,28 @@ describe('offline social work repository', () => {
     vi.spyOn(api, 'listCampaigns').mockResolvedValue([]);
 
     expect(await loadCampaigns()).toEqual([]);
-    expect(await db.campaigns.get(campaign.id)).toBeUndefined();
+    expect(await db.campaigns.get(campaign.id)).toMatchObject({ syncStatus: 'conflict' });
+  });
+
+  it('quarantines pending screening changes when another person deleted the campaign', async () => {
+    const athleteId = crypto.randomUUID();
+    const participantId = crypto.randomUUID();
+    const campaign = {
+      id: crypto.randomUUID(), name: 'Brigada eliminada remotamente', date: '2026-08-27', place: 'Lugar QA', instrumentId: crypto.randomUUID(),
+      professionalName: 'Laura', athleteIds: [athleteId], status: 'ACTIVE', version: 2,
+      instrument: { id: crypto.randomUUID(), name: 'Preventivo', version: 1, active: true, questions: [] },
+      participants: [{ id: participantId, athleteId, athleteName: 'Deportista QA', status: 'IN_PROGRESS', responses: { q1: 'Sí' }, version: 1, syncStatus: 'pending' }],
+      createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), syncStatus: 'pending',
+    } satisfies ScreeningCampaignData;
+    const mutationId = crypto.randomUUID();
+    await db.campaigns.put(campaign);
+    await db.syncQueue.put({ mutationId, entityType: 'screening-result', entityId: participantId, operation: 'update', baseVersion: 1, occurredAt: new Date().toISOString(), payload: { id: participantId, campaignId: campaign.id, athleteId, status: 'IN_PROGRESS', responses: { q1: 'Sí' }, version: 1 }, status: 'pending', attempts: 0 });
+    Object.defineProperty(navigator, 'onLine', { configurable: true, value: true });
+    vi.spyOn(api, 'listCampaigns').mockResolvedValue([]);
+
+    expect(await loadCampaigns()).toEqual([]);
+    expect(await db.campaigns.get(campaign.id)).toMatchObject({ syncStatus: 'conflict' });
+    expect(await db.syncQueue.get(mutationId)).toMatchObject({ status: 'conflict', lastError: expect.stringContaining('copia local se conservó') });
   });
 
   it('replaces stale questionnaires when another user changes the server catalog', async () => {

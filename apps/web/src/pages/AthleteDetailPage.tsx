@@ -9,6 +9,7 @@ import type { AthleteWorkspace } from '@socialapp/shared';
 
 const sexLabels = { FEMALE: 'Femenino', MALE: 'Masculino', INTERSEX: 'Intersexual', OTHER: 'Otro', PREFER_NOT_TO_SAY: 'Prefiere no responder' };
 const statusLabels = { ACTIVE: 'Activo', RETIRED: 'Retirado', SUSPENDED: 'Suspendido', OTHER: 'Otro' };
+const zoneLabels = { UNSPECIFIED: 'Sin informar', URBAN: 'Urbana', RURAL: 'Rural' };
 
 export function AthleteDetailPage() {
   const { can } = useAuth();
@@ -84,7 +85,7 @@ export function AthleteDetailPage() {
       <div className="mt-7 grid gap-6 xl:grid-cols-[1fr_.8fr]">
         <div className="space-y-6">
           <InfoSection title="Información básica" icon={<UserRound />}>
-            <Item label="Código" value={athlete.internalCode} /><Item label="Documento" value={athlete.documentNumber || 'No registrado'} /><Item label="Sexo" value={sexLabels[athlete.sex]} /><Item label="Nacimiento" value={athlete.birthDate} /><Item label="Municipio" value={athlete.municipality} /><Item label="Zona" value={athlete.zone === 'URBAN' ? 'Urbana' : 'Rural'} />
+            <Item label="Código" value={athlete.internalCode} /><Item label="Documento" value={athlete.documentNumber || 'No registrado'} /><Item label="Sexo" value={sexLabels[athlete.sex]} /><Item label="Nacimiento" value={athlete.birthDate} /><Item label="Municipio" value={athlete.municipality} /><Item label="Zona" value={zoneLabels[athlete.zone]} />
           </InfoSection>
           <InfoSection title="Información deportiva" icon={<CalendarDays />}>
             <Item label="Programa" value={athlete.sportsProgramName} /><Item label="Deporte" value={athlete.sportName} /><Item label="Categoría" value={athlete.categoryName} /><Item label="Entrenador" value={athlete.coachName || 'Sin asignar'} /><Item label="Fecha de ingreso" value={athlete.joinedAt} />

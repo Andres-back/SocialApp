@@ -33,6 +33,7 @@ enum AthleteStatus {
 }
 
 enum Zone {
+  UNSPECIFIED
   URBAN
   RURAL
 }

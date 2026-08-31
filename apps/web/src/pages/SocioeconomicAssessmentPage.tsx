@@ -9,7 +9,7 @@ import { createId } from '../lib/uuid';
 
 const initial = (athleteId: string): SocioeconomicAssessmentInput => ({
   id: createId(), athleteId, instrumentVersion: 1, status: 'COMPLETED', housingType: 'HOUSE', housingTenure: 'FAMILY',
-  bedrooms: 2, householdSize: 4, zone: 'URBAN', utilities: ['ELECTRICITY', 'POTABLE_WATER'], exclusiveKitchen: true,
+  bedrooms: 2, householdSize: 4, zone: 'UNSPECIFIED', utilities: ['ELECTRICITY', 'POTABLE_WATER'], exclusiveKitchen: true,
   transportMode: 'WALKING', travelTime: 'FROM_15_TO_30', transportDifficulty: 'NEVER', foodReduction: 'NEVER',
   foodBeforeTraining: 'ALWAYS', incomeRange: 'FROM_1_TO_2_SMMLV', dependents: 3, informedObservation: '', professionalAssessment: '',
   completedAt: new Date().toISOString(), version: 0,
@@ -32,7 +32,7 @@ export function SocioeconomicAssessmentPage() {
         <Select label="Tenencia" value={values.housingTenure} onChange={(v) => update('housingTenure', v as typeof values.housingTenure)} options={[['OWNED','Propia'],['RENTED','Arrendada'],['FAMILY','Familiar'],['OTHER','Otra']]}/>
         <NumberField label="Dormitorios" value={values.bedrooms} onChange={(v) => update('bedrooms', v)} min={1}/>
         <NumberField label="Personas en la vivienda" value={values.householdSize} onChange={(v) => update('householdSize', v)} min={1}/>
-        <Select label="Ubicación" value={values.zone} onChange={(v) => update('zone', v as typeof values.zone)} options={[['URBAN','Urbana'],['RURAL','Rural']]}/>
+        <Select label="Ubicación" value={values.zone} onChange={(v) => update('zone', v as typeof values.zone)} options={[['UNSPECIFIED','Sin informar'],['URBAN','Urbana'],['RURAL','Rural']]}/>
       </Grid><p className="mt-7 text-sm font-semibold text-slate-700">Servicios disponibles</p><div className="mt-3 grid gap-3 sm:grid-cols-2">{([['ELECTRICITY','Energía eléctrica'],['GAS','Gas'],['SEWERAGE','Alcantarillado'],['POTABLE_WATER','Agua potable'],['INTERNET','Internet']] as const).map(([v,l]) => <CheckBox key={v} label={l} checked={values.utilities.includes(v)} onChange={() => toggleUtility(v)}/>)}</div><div className="mt-4"><CheckBox label="Cuenta con espacio exclusivo para cocinar" checked={values.exclusiveKitchen} onChange={() => update('exclusiveKitchen', !values.exclusiveKitchen)}/></div></>}
       {step === 2 && <><Title title="Transporte" note="Barreras que pueden afectar la asistencia."/><Grid>
         <Select label="Desplazamiento habitual" value={values.transportMode} onChange={(v) => update('transportMode', v as typeof values.transportMode)} options={[['WALKING','Caminando'],['BICYCLE','Bicicleta'],['PUBLIC_TRANSPORT','Transporte público'],['MOTORCYCLE','Moto'],['FAMILY_TRANSPORT','Transporte familiar'],['INSTITUTIONAL_TRANSPORT','Transporte institucional'],['OTHER','Otro']]}/>

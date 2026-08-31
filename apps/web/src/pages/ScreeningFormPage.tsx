@@ -10,12 +10,14 @@ export function ScreeningFormPage() {
   const navigate = useNavigate();
   const online = useConnection();
   const [campaign, setCampaign] = useState<ScreeningCampaignData>();
+  const [loaded, setLoaded] = useState(false);
   const [responses, setResponses] = useState<Record<string, unknown>>({});
   const [dirty, setDirty] = useState(false);
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [error, setError] = useState('');
 
   useEffect(() => {
+    setLoaded(false);
     loadCampaigns().then((items) => {
       const item = items.find((current) => current.id === id);
       setCampaign(item);
@@ -23,7 +25,7 @@ export function ScreeningFormPage() {
       if (existing) {
         setResponses(existing.responses);
       }
-    });
+    }).finally(() => setLoaded(true));
   }, [id, athleteId]);
 
   useEffect(() => {
@@ -37,7 +39,9 @@ export function ScreeningFormPage() {
     return () => window.clearTimeout(timer);
   }, [athleteId, campaign, dirty, id, responses]);
 
-  if (!campaign) return <div className="p-12 text-center text-sm text-slate-500">Abriendo instrumento…</div>;
+  if (!campaign) return loaded
+    ? <div className="card p-10 text-center"><h1 className="font-display text-3xl text-pine-900">La brigada ya no está disponible</h1><p className="mt-2 text-sm text-slate-500">No se enviaron más cambios. La información local pendiente permanece protegida en Sincronización.</p><Link to="/brigadas" className="btn-primary mt-6">Volver a brigadas</Link></div>
+    : <div className="p-12 text-center text-sm text-slate-500">Abriendo instrumento…</div>;
   const currentCampaign = campaign;
   const person = currentCampaign.participants.find((participant) => participant.athleteId === athleteId);
   if (!person) return <Navigate to={`/brigadas/${id}`} replace/>;

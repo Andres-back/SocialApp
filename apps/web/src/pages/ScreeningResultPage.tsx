@@ -16,12 +16,15 @@ export function ScreeningResultPage() {
   const { can } = useAuth();
   const { id = '', athleteId = '' } = useParams();
   const [campaign, setCampaign] = useState<ScreeningCampaignData>();
+  const [loaded, setLoaded] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [generated, setGenerated] = useState<AiRiskReportData>();
   const [error, setError] = useState('');
-  useEffect(() => { loadCampaigns().then((items) => setCampaign(items.find((item) => item.id === id))); }, [id]);
+  useEffect(() => { setLoaded(false); loadCampaigns().then((items) => setCampaign(items.find((item) => item.id === id))).finally(() => setLoaded(true)); }, [id]);
   const participant = campaign?.participants.find((item) => item.athleteId === athleteId);
-  if (!campaign || !participant) return <div className="p-12 text-center text-sm text-slate-500">Consultando resultado…</div>;
+  if (!campaign || !participant) return loaded
+    ? <div className="card p-10 text-center"><h1 className="font-display text-3xl text-pine-900">Resultado no disponible</h1><p className="mt-2 text-sm text-slate-500">La brigada fue eliminada o el deportista ya no pertenece a ella.</p><Link to="/brigadas" className="btn-primary mt-6">Volver a brigadas</Link></div>
+    : <div className="p-12 text-center text-sm text-slate-500">Consultando resultado…</div>;
   async function generateRiskReport() {
     setGenerating(true); setError('');
     try { setGenerated(await api.generateAiRiskReport(athleteId, participant!.id)); }

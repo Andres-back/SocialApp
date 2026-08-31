@@ -71,8 +71,8 @@ export class CampaignsService {
     return this.serializeCampaign(saved);
   }
   async remove(userId: string, id: string) {
-    const campaign = await this.prisma.screeningCampaign.findFirst({ where: { id, deletedAt: null } });
-    if (!campaign) throw new NotFoundException('No encontramos la brigada.');
+    const campaign = await this.prisma.screeningCampaign.findUnique({ where: { id } });
+    if (!campaign || campaign.deletedAt) return { success: true, alreadyDeleted: true };
     await this.prisma.screeningCampaign.update({ where: { id }, data: { deletedAt: new Date(), updatedBy: userId, version: { increment: 1 } } });
     await this.audit.record({ actorUserId: userId, action: 'campaign.delete', resourceType: 'ScreeningCampaign', resourceId: id, metadata: { mode: 'soft-delete' } });
     return { success: true };

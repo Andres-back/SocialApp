@@ -14,8 +14,9 @@ const queryClient = new QueryClient({
 });
 
 registerSW({
-  onNeedRefresh() {
-    window.dispatchEvent(new CustomEvent('socialapp:update-ready'));
+  immediate: true,
+  onRegisteredSW(_url, registration) {
+    window.setInterval(() => { void registration?.update(); }, 60_000);
   },
 });
 
@@ -30,4 +31,3 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
     </QueryClientProvider>
   </React.StrictMode>,
 );
-

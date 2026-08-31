@@ -20,7 +20,7 @@ const schema = z.object({
   birthDate: z.string().min(1, 'Selecciona la fecha de nacimiento.'),
   sex: z.enum(['FEMALE', 'MALE', 'INTERSEX', 'OTHER', 'PREFER_NOT_TO_SAY']),
   municipality: z.string().trim().max(120).optional(),
-  zone: z.enum(['URBAN', 'RURAL']),
+  zone: z.enum(['UNSPECIFIED', 'URBAN', 'RURAL']),
   sportsProgramId: z.string().optional(),
   sportId: z.string().optional(),
   categoryId: z.string().optional(),
@@ -68,7 +68,7 @@ export function AthleteFormPage() {
     resolver: zodResolver(schema),
     defaultValues: {
       internalCode: generatedCode, documentType: 'NONE', documentNumber: '', firstNames: '', lastNames: '',
-      birthDate: '', sex: 'PREFER_NOT_TO_SAY', municipality: '', zone: 'URBAN', sportsProgramId: '', sportId: '', categoryId: '',
+      birthDate: '', sex: 'PREFER_NOT_TO_SAY', municipality: '', zone: 'UNSPECIFIED', sportsProgramId: '', sportId: '', categoryId: '',
       coachId: '', joinedAt: new Date().toISOString().slice(0, 10), status: 'ACTIVE', schoolName: '', schoolGrade: '',
       schoolShift: '', currentlyEnrolled: false, guardianName: '', guardianRelationship: '', guardianPhone: '', guardianEmail: '',
     },
@@ -176,7 +176,7 @@ export function AthleteFormPage() {
           <label><span className="text-sm font-semibold text-slate-700">Fecha de nacimiento *</span><input type="date" max={new Date().toISOString().slice(0, 10)} className={inputClass} {...register('birthDate')} /><FieldError message={errors.birthDate?.message} /></label>
           <label><span className="text-sm font-semibold text-slate-700">Sexo</span><select className={inputClass} {...register('sex')}><option value="PREFER_NOT_TO_SAY">No informado</option><option value="FEMALE">Femenino</option><option value="MALE">Masculino</option><option value="INTERSEX">Intersexual</option><option value="OTHER">Otro</option></select></label>
           <label><span className="text-sm font-semibold text-slate-700">Municipio</span><input className={inputClass} {...register('municipality')} /><FieldError message={errors.municipality?.message} /></label>
-          <label><span className="text-sm font-semibold text-slate-700">Zona</span><select className={inputClass} {...register('zone')}><option value="URBAN">Urbana / por definir</option><option value="RURAL">Rural</option></select></label>
+          <label><span className="text-sm font-semibold text-slate-700">Zona</span><select className={inputClass} {...register('zone')}><option value="UNSPECIFIED">Sin informar</option><option value="URBAN">Urbana</option><option value="RURAL">Rural</option></select></label>
         </FormSection>
         <FormSection title="Información deportiva" description="Vinculación actual al programa.">
           <CatalogSelect label="Programa" items={catalogs?.programs} registration={register('sportsProgramId')} error={errors.sportsProgramId?.message} />
