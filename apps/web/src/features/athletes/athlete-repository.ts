@@ -2,6 +2,7 @@ import type { AthleteInput, AthleteRecord, SocialRecordData, SocialRecordInput, 
 import { api, ApiRequestError } from '../../lib/api';
 import { db } from '../../lib/db';
 import { synchronize } from '../../lib/sync-engine';
+import { createId } from '../../lib/uuid';
 
 function ageFromDate(value: string) {
   const today = new Date();
@@ -121,7 +122,7 @@ export async function saveAthleteOffline(input: AthleteInput, catalogs: SportsCa
   await db.transaction('rw', db.athletes, db.syncQueue, async () => {
     await db.athletes.put(record);
     await db.syncQueue.put({
-      mutationId: crypto.randomUUID(),
+      mutationId: createId(),
       entityType: 'athlete',
       entityId: input.id,
       operation: existing ? 'update' : 'create',
@@ -172,7 +173,7 @@ export async function saveSocialRecordOffline(input: SocialRecordInput): Promise
     await db.socialRecords.put(record);
     await db.athletes.update(input.athleteId, { hasSocialRecord: true, socialRecordUpdatedAt: now });
     await db.syncQueue.put({
-      mutationId: crypto.randomUUID(),
+      mutationId: createId(),
       entityType: 'social-record',
       entityId: input.id,
       operation: existing ? 'update' : 'create',

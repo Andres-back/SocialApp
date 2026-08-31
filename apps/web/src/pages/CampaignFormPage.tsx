@@ -5,6 +5,7 @@ import { instrumentMatchesAge, type AthleteRecord, type CampaignStatus, type Cat
 import { useAuth } from '../features/auth/useAuth';
 import { loadAthletes, loadCatalogs } from '../features/athletes/athlete-repository';
 import { loadCampaigns, loadInstruments, saveCampaignOffline } from '../features/work/work-repository';
+import { createId } from '../lib/uuid';
 
 const initialValues = { name: '', date: new Date().toISOString().slice(0, 10), place: '', programId: '', sportId: '', instrumentId: '', status: 'ACTIVE' as CampaignStatus };
 
@@ -68,7 +69,7 @@ export function CampaignFormPage() {
     if (incompatible.length > 0) return setError(`El instrumento ${instrument.ageGroup} no corresponde a la edad de: ${incompatible.map((athlete) => `${athlete.firstNames} ${athlete.lastNames} (${athlete.age})`).join(', ')}.`);
     setSaving(true);
     try {
-      const campaignId = existing?.id ?? crypto.randomUUID();
+      const campaignId = existing?.id ?? createId();
       const campaignName = values.name.trim() || `Brigada ${instrument.name} · ${values.date}`;
       const input: ScreeningCampaignInput = {
         id: campaignId, name: campaignName, date: values.date, place: values.place.trim() || 'Por definir', sportsProgramId: values.programId || null,

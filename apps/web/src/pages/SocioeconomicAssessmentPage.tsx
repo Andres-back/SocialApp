@@ -5,9 +5,10 @@ import type { AthleteRecord, SocioeconomicAssessmentInput } from '@socialapp/sha
 import { loadAthlete } from '../features/athletes/athlete-repository';
 import { loadWorkspace, saveAssessmentOffline } from '../features/work/work-repository';
 import { useConnection } from '../hooks/useConnection';
+import { createId } from '../lib/uuid';
 
 const initial = (athleteId: string): SocioeconomicAssessmentInput => ({
-  id: crypto.randomUUID(), athleteId, instrumentVersion: 1, status: 'COMPLETED', housingType: 'HOUSE', housingTenure: 'FAMILY',
+  id: createId(), athleteId, instrumentVersion: 1, status: 'COMPLETED', housingType: 'HOUSE', housingTenure: 'FAMILY',
   bedrooms: 2, householdSize: 4, zone: 'URBAN', utilities: ['ELECTRICITY', 'POTABLE_WATER'], exclusiveKitchen: true,
   transportMode: 'WALKING', travelTime: 'FROM_15_TO_30', transportDifficulty: 'NEVER', foodReduction: 'NEVER',
   foodBeforeTraining: 'ALWAYS', incomeRange: 'FROM_1_TO_2_SMMLV', dependents: 3, informedObservation: '', professionalAssessment: '',

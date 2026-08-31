@@ -2,9 +2,10 @@ import type { AlertData, AthleteWorkspace, FollowUpCaseData, FollowUpCaseInput, 
 import { api } from '../../lib/api';
 import { db, type LocalMutation } from '../../lib/db';
 import { synchronize } from '../../lib/sync-engine';
+import { createId } from '../../lib/uuid';
 
 async function queue(entityType: string, entityId: string, payload: unknown, baseVersion: number, operation: LocalMutation['operation'] = 'create') {
-  await db.syncQueue.put({ mutationId: crypto.randomUUID(), entityType, entityId, operation, baseVersion, occurredAt: new Date().toISOString(), payload, status: 'pending', attempts: 0 });
+  await db.syncQueue.put({ mutationId: createId(), entityType, entityId, operation, baseVersion, occurredAt: new Date().toISOString(), payload, status: 'pending', attempts: 0 });
 }
 function syncSoon() { if (navigator.onLine) void synchronize().catch(() => undefined); }
 
@@ -106,7 +107,7 @@ export async function loadInstruments(): Promise<ScreeningInstrumentData[]> {
 }
 export async function saveCampaignOffline(input: ScreeningCampaignInput, instrument: ScreeningInstrumentData, athleteNames: Record<string, string>, labels?: { sportsProgramName?: string | null; sportName?: string | null }) {
   const existing = await db.campaigns.get(input.id); const now = new Date().toISOString();
-  const participants = input.athleteIds.map((athleteId) => existing?.participants.find((item) => item.athleteId === athleteId) ?? { id: crypto.randomUUID(), athleteId, athleteName: athleteNames[athleteId] ?? 'Deportista', status: 'PENDING' as const, responses: {}, version: 1, syncStatus: 'pending' as const });
+  const participants = input.athleteIds.map((athleteId) => existing?.participants.find((item) => item.athleteId === athleteId) ?? { id: createId(), athleteId, athleteName: athleteNames[athleteId] ?? 'Deportista', status: 'PENDING' as const, responses: {}, version: 1, syncStatus: 'pending' as const });
   const record: ScreeningCampaignData = { ...input, instrument, participants, sportsProgramName: labels?.sportsProgramName ?? existing?.sportsProgramName ?? null, sportName: labels?.sportName ?? existing?.sportName ?? null, createdAt: existing?.createdAt ?? now, updatedAt: now, syncStatus: 'pending' };
   await db.transaction('rw', db.campaigns, db.syncQueue, async () => { await db.campaigns.put(record); await queue('campaign', input.id, input, input.version, existing ? 'update' : 'create'); });
   if (navigator.onLine) {

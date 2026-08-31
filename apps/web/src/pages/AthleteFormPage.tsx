@@ -7,6 +7,7 @@ import { z } from 'zod';
 import type { AthleteInput, AthleteRecord, CatalogItem, SportsCatalogs } from '@socialapp/shared';
 import { loadAthlete, loadCatalogs, saveAthleteOffline } from '../features/athletes/athlete-repository';
 import { useConnection } from '../hooks/useConnection';
+import { createId } from '../lib/uuid';
 
 const optionalText = z.string().trim().max(180).optional();
 const schema = z.object({
@@ -112,7 +113,7 @@ export function AthleteFormPage() {
     const sportId = values.sportId || catalogFallback(catalogs.sports);
     const categoryId = values.categoryId || catalogFallback(catalogs.categories);
     if (!sportsProgramId || !sportId || !categoryId) return setLoadError('Configura al menos una opción de programa, deporte y categoría.');
-    const athleteId = id ?? crypto.randomUUID();
+    const athleteId = id ?? createId();
     const hasGuardian = Boolean(values.guardianName || values.guardianRelationship || values.guardianPhone || values.guardianEmail);
     const input: AthleteInput = {
       id: athleteId, internalCode: values.internalCode || generatedCode, documentType: values.documentType,

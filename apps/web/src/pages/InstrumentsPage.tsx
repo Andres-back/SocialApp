@@ -7,6 +7,7 @@ import { screeningInstrumentPath, SYSTEM_INSTRUMENTS, systemInstrumentPath, type
 import { useAuth } from '../features/auth/useAuth';
 import { loadInstruments } from '../features/work/work-repository';
 import { api } from '../lib/api';
+import { createId } from '../lib/uuid';
 
 const ageGroups = ['6 a 9 años', '10 a 13 años', '14 a 17 años'];
 const types: Array<{ value: ScreeningQuestionData['type']; label: string }> = [
@@ -25,7 +26,7 @@ const systemIcons: Record<SystemInstrumentKind, LucideIcon> = {
 type EditableQuestion = Omit<ScreeningQuestionData, 'position'> & { optionsText: string };
 
 function blankQuestion(): EditableQuestion {
-  return { id: crypto.randomUUID(), dimension: 'General', prompt: '', type: 'YES_NO', options: ['Sí', 'No'], optionsText: 'Sí, No', required: true };
+  return { id: createId(), dimension: 'General', prompt: '', type: 'YES_NO', options: ['Sí', 'No'], optionsText: 'Sí, No', required: true };
 }
 
 export function InstrumentsPage() {

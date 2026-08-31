@@ -9,6 +9,7 @@ import { loadAthlete, loadSocialRecord, saveSocialRecordOffline } from '../featu
 import { useAuth } from '../features/auth/useAuth';
 import { useConnection } from '../hooks/useConnection';
 import { db } from '../lib/db';
+import { createId } from '../lib/uuid';
 
 const memberSchema = z.object({
   id: z.string().uuid(),
@@ -51,7 +52,7 @@ export function SocialRecordFormPage() {
   const { user } = useAuth();
   const online = useConnection();
   const [athlete, setAthlete] = useState<AthleteRecord>();
-  const [recordId, setRecordId] = useState<string>(() => crypto.randomUUID());
+  const [recordId, setRecordId] = useState<string>(() => createId());
   const [recordVersion, setRecordVersion] = useState(0);
   const [step, setStep] = useState(1);
   const [ready, setReady] = useState(false);
@@ -141,7 +142,7 @@ export function SocialRecordFormPage() {
           <p className="mt-2 text-sm text-slate-500">¿Con quién vive actualmente el deportista?</p>
           <div className="mt-5 grid gap-3 sm:grid-cols-2">{livingOptions.map(([value, label]) => <CheckOption key={value} value={value} label={label} registration={register('livingWith')} />)}</div>
           {errors.livingWith?.message && <p className="mt-3 text-sm text-red-600">{errors.livingWith.message}</p>}
-          <div className="mt-8 flex items-center justify-between border-t border-slate-100 pt-7"><div><h3 className="font-semibold text-pine-900">Integrantes del hogar</h3><p className="mt-1 text-xs text-slate-500">Agrégalos individualmente cuando tengas la información.</p></div><button type="button" className="btn-secondary px-4" onClick={() => append({ id: crypto.randomUUID(), name: '', relationship: '', approximateAge: null, livesWithAthlete: true, occupation: '', relationshipQuality: 'ADEQUATE' })}><Plus size={17} /> Agregar</button></div>
+          <div className="mt-8 flex items-center justify-between border-t border-slate-100 pt-7"><div><h3 className="font-semibold text-pine-900">Integrantes del hogar</h3><p className="mt-1 text-xs text-slate-500">Agrégalos individualmente cuando tengas la información.</p></div><button type="button" className="btn-secondary px-4" onClick={() => append({ id: createId(), name: '', relationship: '', approximateAge: null, livesWithAthlete: true, occupation: '', relationshipQuality: 'ADEQUATE' })}><Plus size={17} /> Agregar</button></div>
           <div className="mt-5 space-y-4">{fields.length === 0 && <p className="rounded-xl bg-sand-50 p-5 text-center text-sm text-slate-500">Aún no has agregado integrantes.</p>}{fields.map((field, index) => <div key={field.id} className="rounded-2xl border border-slate-100 bg-sand-50 p-4"><div className="mb-4 flex justify-between"><p className="text-sm font-bold text-pine-900">Integrante {index + 1}</p><button type="button" aria-label={`Eliminar integrante ${index + 1}`} className="rounded-lg p-2 text-red-500 hover:bg-red-50" onClick={() => remove(index)}><Trash2 size={17} /></button></div><div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3"><SmallField label="Nombre *"><input className="field" {...register(`householdMembers.${index}.name`)} /></SmallField><SmallField label="Parentesco *"><input className="field" {...register(`householdMembers.${index}.relationship`)} /></SmallField><SmallField label="Edad aproximada"><input type="number" className="field" {...register(`householdMembers.${index}.approximateAge`, { setValueAs: (value) => value === '' ? null : Number(value) })} /></SmallField><SmallField label="Ocupación"><input className="field" {...register(`householdMembers.${index}.occupation`)} /></SmallField><SmallField label="Relación"><select className="field" {...register(`householdMembers.${index}.relationshipQuality`)}><option value="CLOSE">Cercana</option><option value="ADEQUATE">Adecuada</option><option value="DISTANT">Distante</option><option value="CONFLICTIVE">Conflictiva</option><option value="UNKNOWN">Sin información</option></select></SmallField><label className="flex min-h-12 items-center gap-3 rounded-xl bg-white px-4"><input type="checkbox" className="h-5 w-5 accent-pine-700" {...register(`householdMembers.${index}.livesWithAthlete`)} /><span className="text-sm font-medium">Vive con el deportista</span></label></div></div>)}</div>
         </section>}
 

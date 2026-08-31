@@ -4,10 +4,11 @@ import { Link, useLocation, useParams } from 'react-router-dom';
 import type { AthleteRecord, DiagramEdge, DiagramNode, NetworkDiagramData } from '@socialapp/shared';
 import { loadAthlete, loadSocialRecord } from '../features/athletes/athlete-repository';
 import { loadWorkspace, saveDiagramOffline } from '../features/work/work-repository';
+import { createId } from '../lib/uuid';
 
 export function DiagramPage() {
   const { id = '' } = useParams(); const location = useLocation(); const type = location.pathname.endsWith('/ecomapa') ? 'ecomap' : 'genogram';
-  const [athlete, setAthlete] = useState<AthleteRecord>(); const [recordId, setRecordId] = useState<string>(() => crypto.randomUUID()); const [version, setVersion] = useState(0); const [nodes, setNodes] = useState<DiagramNode[]>([]); const [edges, setEdges] = useState<DiagramEdge[]>([]); const [message, setMessage] = useState('');
+  const [athlete, setAthlete] = useState<AthleteRecord>(); const [recordId, setRecordId] = useState<string>(() => createId()); const [version, setVersion] = useState(0); const [nodes, setNodes] = useState<DiagramNode[]>([]); const [edges, setEdges] = useState<DiagramEdge[]>([]); const [message, setMessage] = useState('');
   useEffect(() => { Promise.all([loadAthlete(id), loadSocialRecord(id), loadWorkspace(id)]).then(([person, social, workspace]) => {
     setAthlete(person); const existing = type === 'genogram' ? workspace.genogram : workspace.ecomap;
     if (existing) { setRecordId(existing.id); setVersion(existing.version); setNodes(existing.nodes); setEdges(existing.edges); return; }
@@ -26,7 +27,7 @@ export function DiagramPage() {
     }
   }); }, [id, type]);
   const nodeMap = useMemo(() => new Map(nodes.map((node) => [node.id, node])), [nodes]);
-  function addNode() { const id = crypto.randomUUID(); setNodes((current) => [...current, { id, label: type === 'genogram' ? 'Nuevo integrante' : 'Nueva red', kind: type === 'genogram' ? 'FAMILIAR' : 'NETWORK', x: 20 + Math.random() * 60, y: 20 + Math.random() * 60 }]); setEdges((current) => [...current, { id: crypto.randomUUID(), source: id, target: 'athlete', relation: type === 'genogram' ? 'ADEQUATE' : 'MODERATE' }]); }
+  function addNode() { const id = createId(); setNodes((current) => [...current, { id, label: type === 'genogram' ? 'Nuevo integrante' : 'Nueva red', kind: type === 'genogram' ? 'FAMILIAR' : 'NETWORK', x: 20 + Math.random() * 60, y: 20 + Math.random() * 60 }]); setEdges((current) => [...current, { id: createId(), source: id, target: 'athlete', relation: type === 'genogram' ? 'ADEQUATE' : 'MODERATE' }]); }
   async function save() { const now = new Date().toISOString(); const input: NetworkDiagramData = { id: recordId, athleteId: id, nodes, edges, version, createdAt: now, updatedAt: now }; const result = await saveDiagramOffline(type, input); setVersion(result.version); setMessage('Diagrama guardado en este dispositivo y listo para sincronizar.'); }
   return <div>
     <Link to={`/deportistas/${id}`} className="inline-flex items-center gap-2 text-sm font-semibold text-pine-700"><ArrowLeft size={17}/> Volver al expediente</Link>
