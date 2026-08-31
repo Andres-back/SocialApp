@@ -1,4 +1,4 @@
-import type { AiRiskReportData, AlertData, AthleteInput, AthleteRecord, AthleteWorkspace, AuthSession, DashboardData, FollowUpCaseData, FollowUpCaseInput, FollowUpEntryData, FollowUpEntryInput, ManageableSportsCatalogs, NetworkDiagramData, ProfessionalObservationData, ReportPopulationData, ScreeningCampaignData, ScreeningCampaignInput, ScreeningInstrumentData, ScreeningInstrumentInput, SocialRecordData, SocialRecordInput, SocioeconomicAssessmentData, SocioeconomicAssessmentInput, SportsCatalogs, SyncMutation, SyncPushResponse } from '@socialapp/shared';
+import type { AiRiskReportData, AlertData, AthleteInput, AthleteRecord, AthleteWorkspace, AuthSession, DashboardData, FollowUpCaseData, FollowUpCaseInput, FollowUpEntryData, FollowUpEntryInput, ManageableSportsCatalogs, NetworkDiagramData, ProfessionalObservationData, ReportPopulationData, ScreeningCampaignData, ScreeningCampaignInput, ScreeningInstrumentData, ScreeningInstrumentInput, SocialRecordData, SocialRecordInput, SocioeconomicAssessmentData, SocioeconomicAssessmentInput, SportsCatalogs, SyncMutation, SyncPushResponse, SystemInstrumentConfigurationData, SystemInstrumentQuestionData } from '@socialapp/shared';
 
 const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:3000/api/v1';
 let accessToken: string | null = sessionStorage.getItem('socialapp.accessToken');
@@ -135,6 +135,8 @@ export const api = {
   },
   listInstruments() { return request<ScreeningInstrumentData[]>('/campaigns/instruments'); },
   manageableInstruments() { return request<ScreeningInstrumentData[]>('/instruments/manage'); },
+  systemInstruments() { return request<SystemInstrumentConfigurationData[]>('/instruments/system'); },
+  saveSystemInstrument(kind: string, questions: SystemInstrumentQuestionData[]) { return request<SystemInstrumentConfigurationData>('/instruments/system/' + kind, { method: 'PUT', body: JSON.stringify({ questions }) }); },
   saveOperationalInstrument(input: ScreeningInstrumentInput) { return request<ScreeningInstrumentData>('/instruments', { method: 'POST', body: JSON.stringify(input) }); },
   updateInstrumentStatus(id: string, active: boolean) { return request<ScreeningInstrumentData>(`/instruments/${id}`, { method: 'PATCH', body: JSON.stringify({ active }) }); },
   deleteInstrument(id: string) { return request<{ success: boolean; deletedVersions: number }>(`/instruments/${id}`, { method: 'DELETE' }); },

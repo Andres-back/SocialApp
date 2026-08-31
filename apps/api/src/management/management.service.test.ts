@@ -22,4 +22,39 @@ describe('ManagementService instruments', () => {
     }));
     expect(audit.record).toHaveBeenCalledOnce();
   });
+
+  it('versions and audits synchronized institutional questions', async () => {
+    const saved = {
+      id: '11111111-1111-1111-1111-111111111111',
+      kind: 'social-record',
+      questions: [{ id: 'livingWith', prompt: '¿Con quién convive?' }],
+      version: 2,
+      updatedAt: new Date('2026-08-31T15:30:00.000Z'),
+    };
+    const prisma = {
+      systemInstrumentConfiguration: {
+        upsert: vi.fn().mockResolvedValue(saved),
+      },
+    };
+    const audit = { record: vi.fn().mockResolvedValue(undefined) };
+    const service = new ManagementService(prisma as never, audit as never, {} as never, {} as never);
+
+    const result = await service.saveSystemInstrument(
+      '22222222-2222-2222-2222-222222222222',
+      'social-record',
+      saved.questions,
+    );
+
+    expect(result).toEqual({
+      kind: 'social-record',
+      questions: saved.questions,
+      version: 2,
+      updatedAt: '2026-08-31T15:30:00.000Z',
+    });
+    expect(prisma.systemInstrumentConfiguration.upsert).toHaveBeenCalledWith(expect.objectContaining({
+      where: { kind: 'social-record' },
+      update: expect.objectContaining({ version: { increment: 1 } }),
+    }));
+    expect(audit.record).toHaveBeenCalledOnce();
+  });
 });

@@ -3,71 +3,487 @@ import { AlertTriangle, ArrowLeft, CalendarPlus, CheckCircle2, CircleDot, Plus, 
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import type { AlertData, AthleteRecord, AthleteWorkspace, FollowUpCaseInput, FollowUpEntryInput, ProfessionalObservationData } from '@socialapp/shared';
 import { useAuth } from '../features/auth/useAuth';
+import { useSystemInstrument } from '../features/instruments/useSystemInstrument';
 import { loadAthlete } from '../features/athletes/athlete-repository';
 import { loadWorkspace, saveAlertOffline, saveFollowUpEntryOffline, saveFollowUpOffline, saveObservationOffline } from '../features/work/work-repository';
 import { createId } from '../lib/uuid';
 
 type Tab = 'alerts' | 'followups' | 'observations' | 'timeline';
-const emptyWorkspace: AthleteWorkspace = { socioeconomicAssessment: null, alerts: [], followUps: [], observations: [], genogram: null, ecomap: null, timeline: [] };
+const emptyWorkspace: AthleteWorkspace = {
+  socioeconomicAssessment: null,
+  alerts: [],
+  followUps: [],
+  observations: [],
+  genogram: null,
+  ecomap: null,
+  timeline: [],
+};
 export function AthleteWorkPage() {
-  const { id = '' } = useParams(); const [searchParams] = useSearchParams(); const requestedTab = searchParams.get('tab') as Tab | null; const startNew = searchParams.get('new') === '1'; const { user } = useAuth(); const [athlete, setAthlete] = useState<AthleteRecord>(); const [workspace, setWorkspace] = useState(emptyWorkspace); const [tab, setTab] = useState<Tab>(requestedTab && ['alerts', 'followups', 'observations', 'timeline'].includes(requestedTab) ? requestedTab : 'alerts'); const [message, setMessage] = useState('');
-  useEffect(() => { Promise.all([loadAthlete(id), loadWorkspace(id)]).then(([person, data]) => { setAthlete(person); setWorkspace(data); }); }, [id]);
-  async function refresh(text: string) { setWorkspace(await loadWorkspace(id)); setMessage(text); }
-  return <div>
-    <Link to={`/deportistas/${id}`} className="inline-flex items-center gap-2 text-sm font-semibold text-pine-700"><ArrowLeft size={17}/> Volver al expediente</Link>
-    <header className="mt-5 rounded-3xl bg-pine-800 p-6 text-white md:p-8"><p className="text-sm text-pine-100">Trabajo Social</p><h1 className="mt-1 font-display text-4xl">{athlete ? `${athlete.firstNames} ${athlete.lastNames}` : 'Expediente social'}</h1><p className="mt-2 text-sm text-pine-100">Alertas, seguimientos, observaciones y trazabilidad en un solo lugar.</p></header>
-    {message && <div className="mt-5 flex items-center gap-2 rounded-xl bg-emerald-50 p-4 text-sm text-emerald-800"><CheckCircle2 size={18}/>{message}</div>}
-    <div className="mt-6 flex gap-2 overflow-x-auto pb-2">{([['alerts','Alertas'],['followups','Seguimientos'],['observations','Observaciones'],['timeline','Historial']] as [Tab,string][]).map(([value,label]) => <button key={value} onClick={() => setTab(value)} className={`min-h-11 shrink-0 rounded-xl px-4 text-sm font-semibold ${tab === value ? 'bg-pine-800 text-white' : 'bg-white text-pine-800'}`}>{label}</button>)}</div>
-    {tab === 'alerts' && <Alerts athleteId={id} alerts={workspace.alerts} startOpen={startNew} onSaved={() => refresh('Alerta actualizada.')} />}
-    {tab === 'followups' && <FollowUps athleteId={id} items={workspace.followUps} startOpen={startNew} professional={user?.displayName ?? 'Trabajo Social'} onSaved={() => refresh('Seguimiento guardado.')} />}
-    {tab === 'observations' && <Observations athleteId={id} items={workspace.observations} professional={user?.displayName ?? 'Trabajo Social'} onSaved={() => refresh('Observación guardada.')} />}
-    {tab === 'timeline' && <Timeline workspace={workspace}/>}
-  </div>;
+  const { id = '' } = useParams();
+  const [searchParams] = useSearchParams();
+  const requestedTab = searchParams.get('tab') as Tab | null;
+  const startNew = searchParams.get('new') === '1';
+  const { user } = useAuth();
+  const [athlete, setAthlete] = useState<AthleteRecord>();
+  const [workspace, setWorkspace] = useState(emptyWorkspace);
+  const [tab, setTab] = useState<Tab>(requestedTab && ['alerts', 'followups', 'observations', 'timeline'].includes(requestedTab) ? requestedTab : 'alerts');
+  const [message, setMessage] = useState('');
+  useEffect(() => {
+    Promise.all([loadAthlete(id), loadWorkspace(id)]).then(([person, data]) => {
+      setAthlete(person);
+      setWorkspace(data);
+    });
+  }, [id]);
+  async function refresh(text: string) {
+    setWorkspace(await loadWorkspace(id));
+    setMessage(text);
+  }
+  return (
+    <div>
+      <Link to={`/deportistas/${id}`} className="inline-flex items-center gap-2 text-sm font-semibold text-pine-700">
+        <ArrowLeft size={17} /> Volver al expediente
+      </Link>
+      <header className="mt-5 rounded-3xl bg-pine-800 p-6 text-white md:p-8">
+        <p className="text-sm text-pine-100">Trabajo Social</p>
+        <h1 className="mt-1 font-display text-4xl">{athlete ? `${athlete.firstNames} ${athlete.lastNames}` : 'Expediente social'}</h1>
+        <p className="mt-2 text-sm text-pine-100">Alertas, seguimientos, observaciones y trazabilidad en un solo lugar.</p>
+      </header>
+      {message && (
+        <div className="mt-5 flex items-center gap-2 rounded-xl bg-emerald-50 p-4 text-sm text-emerald-800">
+          <CheckCircle2 size={18} />
+          {message}
+        </div>
+      )}
+      <div className="mt-6 flex gap-2 overflow-x-auto pb-2">
+        {(
+          [
+            ['alerts', 'Alertas'],
+            ['followups', 'Seguimientos'],
+            ['observations', 'Observaciones'],
+            ['timeline', 'Historial'],
+          ] as [Tab, string][]
+        ).map(([value, label]) => (
+          <button key={value} onClick={() => setTab(value)} className={`min-h-11 shrink-0 rounded-xl px-4 text-sm font-semibold ${tab === value ? 'bg-pine-800 text-white' : 'bg-white text-pine-800'}`}>
+            {label}
+          </button>
+        ))}
+      </div>
+      {tab === 'alerts' && <Alerts athleteId={id} alerts={workspace.alerts} startOpen={startNew} onSaved={() => refresh('Alerta actualizada.')} />}
+      {tab === 'followups' && <FollowUps athleteId={id} items={workspace.followUps} startOpen={startNew} professional={user?.displayName ?? 'Trabajo Social'} onSaved={() => refresh('Seguimiento guardado.')} />}
+      {tab === 'observations' && <Observations athleteId={id} items={workspace.observations} professional={user?.displayName ?? 'Trabajo Social'} onSaved={() => refresh('Observación guardada.')} />}
+      {tab === 'timeline' && <Timeline workspace={workspace} />}
+    </div>
+  );
 }
 
 function Alerts({ athleteId, alerts, startOpen, onSaved }: { athleteId: string; alerts: AlertData[]; startOpen: boolean; onSaved: () => Promise<void> }) {
-  const [manual, setManual] = useState(startOpen); const [indicator, setIndicator] = useState(''); const [informed, setInformed] = useState(''); const [level, setLevel] = useState<AlertData['level']>('YELLOW');
-  async function add() { if (!indicator.trim()) return; const now = new Date().toISOString(); await saveAlertOffline({ id: createId(), athleteId, sourceType: 'PROFESSIONAL', sourceId: null, level, status: 'PENDING', informedData: informed, automaticIndicator: indicator, professionalAssessment: null, createdAt: now, updatedAt: now, version: 0 }); setManual(false); setIndicator(''); await onSaved(); }
-  return <section className="mt-5">
-    <div className="flex items-center justify-between"><div><h2 className="font-display text-3xl text-pine-900">Alertas para valorar</h2><p className="mt-1 text-sm text-slate-500">El indicador automático nunca reemplaza la valoración profesional.</p></div><button className="btn-secondary px-4" onClick={() => setManual(!manual)}><Plus size={17}/> Nueva</button></div>
-    {manual && <div className="card mt-5 grid gap-4 p-5 md:grid-cols-2"><Field label="Dato informado"><textarea className="field py-3" rows={3} value={informed} onChange={(e) => setInformed(e.target.value)}/></Field><Field label="Indicador o motivo"><textarea className="field py-3" rows={3} value={indicator} onChange={(e) => setIndicator(e.target.value)}/></Field><Select value={level} onChange={(v) => setLevel(v as AlertData['level'])} options={[['GREEN','Verde'],['YELLOW','Amarillo'],['RED','Rojo']]}/><button className="btn-primary" onClick={() => void add()}><Save size={17}/> Guardar alerta</button></div>}
-    <div className="mt-5 space-y-4">{alerts.length === 0 && <Empty text="No hay alertas pendientes o registradas."/>}{alerts.map((alert) => <AlertCard key={alert.id} alert={alert} onSaved={onSaved}/>)}</div>
-  </section>;
+  const question = useSystemInstrument('alert-assessment');
+  const [manual, setManual] = useState(startOpen);
+  const [indicator, setIndicator] = useState('');
+  const [informed, setInformed] = useState('');
+  const [level, setLevel] = useState<AlertData['level']>('YELLOW');
+  async function add() {
+    if (!indicator.trim()) return;
+    const now = new Date().toISOString();
+    await saveAlertOffline({
+      id: createId(),
+      athleteId,
+      sourceType: 'PROFESSIONAL',
+      sourceId: null,
+      level,
+      status: 'PENDING',
+      informedData: informed,
+      automaticIndicator: indicator,
+      professionalAssessment: null,
+      createdAt: now,
+      updatedAt: now,
+      version: 0,
+    });
+    setManual(false);
+    setIndicator('');
+    await onSaved();
+  }
+  return (
+    <section className="mt-5">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="font-display text-3xl text-pine-900">Alertas para valorar</h2>
+          <p className="mt-1 text-sm text-slate-500">El indicador automático nunca reemplaza la valoración profesional.</p>
+        </div>
+        <button className="btn-secondary px-4" onClick={() => setManual(!manual)}>
+          <Plus size={17} /> Nueva
+        </button>
+      </div>
+      {manual && (
+        <div className="card mt-5 grid gap-4 p-5 md:grid-cols-2">
+          <Field label={question('informedData')}>
+            <textarea className="field py-3" rows={3} value={informed} onChange={(e) => setInformed(e.target.value)} />
+          </Field>
+          <Field label={question('automaticIndicator')}>
+            <textarea className="field py-3" rows={3} value={indicator} onChange={(e) => setIndicator(e.target.value)} />
+          </Field>
+          <Select
+            label={question('level')}
+            value={level}
+            onChange={(v) => setLevel(v as AlertData['level'])}
+            options={[
+              ['GREEN', 'Verde'],
+              ['YELLOW', 'Amarillo'],
+              ['RED', 'Rojo'],
+            ]}
+          />
+          <button className="btn-primary" onClick={() => void add()}>
+            <Save size={17} /> Guardar alerta
+          </button>
+        </div>
+      )}
+      <div className="mt-5 space-y-4">
+        {alerts.length === 0 && <Empty text="No hay alertas pendientes o registradas." />}
+        {alerts.map((alert) => (
+          <AlertCard key={alert.id} alert={alert} onSaved={onSaved} />
+        ))}
+      </div>
+    </section>
+  );
 }
 function AlertCard({ alert, onSaved }: { alert: AlertData; onSaved: () => Promise<void> }) {
+  const question = useSystemInstrument('alert-assessment');
   const [assessment, setAssessment] = useState(alert.professionalAssessment ?? '');
-  async function review(status: AlertData['status']) { await saveAlertOffline({ ...alert, status, professionalAssessment: assessment, version: alert.version }); await onSaved(); }
+  async function review(status: AlertData['status']) {
+    await saveAlertOffline({
+      ...alert,
+      status,
+      professionalAssessment: assessment,
+      version: alert.version,
+    });
+    await onSaved();
+  }
   const tone = alert.level === 'RED' ? 'border-red-200 bg-red-50' : alert.level === 'YELLOW' ? 'border-amber-200 bg-amber-50' : 'border-emerald-200 bg-emerald-50';
-  return <article className={`rounded-2xl border p-5 ${tone}`}><div className="flex flex-wrap justify-between gap-3"><div><p className="text-xs font-bold uppercase tracking-wide">{alert.level === 'RED' ? 'Prioritaria' : alert.level === 'YELLOW' ? 'Preventiva' : 'Sin indicador relevante'}</p><h3 className="mt-1 font-semibold text-slate-800">{alert.automaticIndicator}</h3></div><span className="rounded-full bg-white px-3 py-1 text-xs font-semibold">{alert.status === 'PENDING' ? 'Pendiente' : alert.status === 'CONFIRMED' ? 'Confirmada' : 'Descartada'}</span></div><div className="mt-4 grid gap-4 md:grid-cols-2"><div className="rounded-xl bg-white/80 p-4"><p className="text-xs font-bold text-slate-400">DATO INFORMADO</p><p className="mt-2 text-sm">{alert.informedData || 'Sin texto informado asociado.'}</p></div><label className="rounded-xl bg-white/80 p-4"><span className="text-xs font-bold text-slate-400">VALORACIÓN PROFESIONAL</span><textarea className="field mt-2 py-2" rows={3} value={assessment} onChange={(e) => setAssessment(e.target.value)}/></label></div><div className="mt-4 flex flex-wrap gap-3"><button className="btn-primary min-h-10 py-2" onClick={() => void review('CONFIRMED')}><ShieldCheck size={16}/> Confirmar</button><button className="btn-secondary min-h-10 py-2" onClick={() => void review('DISMISSED')}>Descartar</button></div></article>;
+  return (
+    <article className={`rounded-2xl border p-5 ${tone}`}>
+      <div className="flex flex-wrap justify-between gap-3">
+        <div>
+          <p className="text-xs font-bold uppercase tracking-wide">{alert.level === 'RED' ? 'Prioritaria' : alert.level === 'YELLOW' ? 'Preventiva' : 'Sin indicador relevante'}</p>
+          <h3 className="mt-1 font-semibold text-slate-800">{alert.automaticIndicator}</h3>
+        </div>
+        <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold">{alert.status === 'PENDING' ? 'Pendiente' : alert.status === 'CONFIRMED' ? 'Confirmada' : 'Descartada'}</span>
+      </div>
+      <div className="mt-4 grid gap-4 md:grid-cols-2">
+        <div className="rounded-xl bg-white/80 p-4">
+          <p className="text-xs font-bold text-slate-400">{question('informedData').toLocaleUpperCase('es')}</p>
+          <p className="mt-2 text-sm">{alert.informedData || 'Sin texto informado asociado.'}</p>
+        </div>
+        <label className="rounded-xl bg-white/80 p-4">
+          <span className="text-xs font-bold text-slate-400">{question('professionalAssessment').toLocaleUpperCase('es')}</span>
+          <textarea className="field mt-2 py-2" rows={3} value={assessment} onChange={(e) => setAssessment(e.target.value)} />
+        </label>
+      </div>
+      <div className="mt-4 flex flex-wrap gap-3">
+        <button className="btn-primary min-h-10 py-2" onClick={() => void review('CONFIRMED')}>
+          <ShieldCheck size={16} /> Confirmar
+        </button>
+        <button className="btn-secondary min-h-10 py-2" onClick={() => void review('DISMISSED')}>
+          Descartar
+        </button>
+      </div>
+    </article>
+  );
 }
 
 function FollowUps({ athleteId, items, startOpen, professional, onSaved }: { athleteId: string; items: AthleteWorkspace['followUps']; startOpen: boolean; professional: string; onSaved: () => Promise<void> }) {
-  const [open, setOpen] = useState(startOpen); const [motive, setMotive] = useState(''); const [priority, setPriority] = useState<FollowUpCaseInput['priority']>('MEDIUM'); const [date, setDate] = useState('');
-  async function add() { if (!motive.trim()) return; await saveFollowUpOffline({ id: createId(), athleteId, motive, priority, status: 'OPEN', responsible: professional, nextAction: 'Contactar familia o red de apoyo', estimatedDate: date || null, version: 0 }); setOpen(false); setMotive(''); await onSaved(); }
-  return <section className="mt-5"><div className="flex items-center justify-between"><div><h2 className="font-display text-3xl text-pine-900">Seguimientos</h2><p className="text-sm text-slate-500">Casos, acuerdos, próximas acciones e intervenciones.</p></div><button className="btn-primary px-4" onClick={() => setOpen(!open)}><CalendarPlus size={17}/> Nuevo</button></div>
-    {open && <div className="card mt-5 grid gap-4 p-5 md:grid-cols-2"><Field label="Motivo"><input className="field" value={motive} onChange={(e) => setMotive(e.target.value)}/></Field><Select value={priority} onChange={(v) => setPriority(v as FollowUpCaseInput['priority'])} options={[['LOW','Baja'],['MEDIUM','Media'],['HIGH','Alta']]}/><Field label="Próxima fecha"><input type="date" className="field" value={date} onChange={(e) => setDate(e.target.value)}/></Field><button className="btn-primary self-end" onClick={() => void add()}><Save size={17}/> Crear seguimiento</button></div>}
-    <div className="mt-5 space-y-4">{items.length === 0 && <Empty text="Aún no hay seguimientos para este deportista."/>}{items.map((item) => <FollowUpCard key={item.id} item={item} professional={professional} onSaved={onSaved}/>)}</div>
-  </section>;
+  const question = useSystemInstrument('social-follow-up');
+  const [open, setOpen] = useState(startOpen);
+  const [motive, setMotive] = useState('');
+  const [priority, setPriority] = useState<FollowUpCaseInput['priority']>('MEDIUM');
+  const [date, setDate] = useState('');
+  async function add() {
+    if (!motive.trim()) return;
+    await saveFollowUpOffline({
+      id: createId(),
+      athleteId,
+      motive,
+      priority,
+      status: 'OPEN',
+      responsible: professional,
+      nextAction: 'Contactar familia o red de apoyo',
+      estimatedDate: date || null,
+      version: 0,
+    });
+    setOpen(false);
+    setMotive('');
+    await onSaved();
+  }
+  return (
+    <section className="mt-5">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="font-display text-3xl text-pine-900">Seguimientos</h2>
+          <p className="text-sm text-slate-500">Casos, acuerdos, próximas acciones e intervenciones.</p>
+        </div>
+        <button className="btn-primary px-4" onClick={() => setOpen(!open)}>
+          <CalendarPlus size={17} /> Nuevo
+        </button>
+      </div>
+      {open && (
+        <div className="card mt-5 grid gap-4 p-5 md:grid-cols-2">
+          <Field label={question('motive')}>
+            <input className="field" value={motive} onChange={(e) => setMotive(e.target.value)} />
+          </Field>
+          <Select
+            label={question('priority')}
+            value={priority}
+            onChange={(v) => setPriority(v as FollowUpCaseInput['priority'])}
+            options={[
+              ['LOW', 'Baja'],
+              ['MEDIUM', 'Media'],
+              ['HIGH', 'Alta'],
+            ]}
+          />
+          <Field label={question('estimatedDate')}>
+            <input type="date" className="field" value={date} onChange={(e) => setDate(e.target.value)} />
+          </Field>
+          <button className="btn-primary self-end" onClick={() => void add()}>
+            <Save size={17} /> Crear seguimiento
+          </button>
+        </div>
+      )}
+      <div className="mt-5 space-y-4">
+        {items.length === 0 && <Empty text="Aún no hay seguimientos para este deportista." />}
+        {items.map((item) => (
+          <FollowUpCard key={item.id} item={item} professional={professional} onSaved={onSaved} />
+        ))}
+      </div>
+    </section>
+  );
 }
-function FollowUpCard({ item, professional, onSaved }: { item: FollowUpCaseInput & { entries: AthleteWorkspace['followUps'][number]['entries']; updatedAt: string }; professional: string; onSaved: () => Promise<void> }) {
-  const [expanded, setExpanded] = useState(false); const [situation, setSituation] = useState(''); const [actions, setActions] = useState(''); const [agreements, setAgreements] = useState(''); const [nextDate, setNextDate] = useState('');
-  async function addEntry() { if (!situation || !actions) return; const input: FollowUpEntryInput = { id: createId(), followUpCaseId: item.id, date: new Date().toISOString().slice(0,10), situation, actions, agreements, responsible: professional, nextAction: agreements || null, estimatedDate: nextDate || null }; await saveFollowUpEntryOffline(input, professional); setExpanded(false); await onSaved(); }
-  async function close() { await saveFollowUpOffline({ id: item.id, athleteId: item.athleteId, motive: item.motive, priority: item.priority, status: 'CLOSED', responsible: item.responsible, nextAction: item.nextAction, estimatedDate: item.estimatedDate, version: item.version }); await onSaved(); }
-  return <article className="card p-5"><div className="flex flex-wrap items-start justify-between gap-3"><div><span className={`rounded-full px-3 py-1 text-xs font-bold ${item.priority === 'HIGH' ? 'bg-red-50 text-red-700' : item.priority === 'MEDIUM' ? 'bg-amber-50 text-amber-700' : 'bg-blue-50 text-blue-700'}`}>{item.priority === 'HIGH' ? 'Alta' : item.priority === 'MEDIUM' ? 'Media' : 'Baja'}</span><h3 className="mt-3 text-lg font-bold text-pine-900">{item.motive}</h3><p className="mt-1 text-sm text-slate-500">{item.status === 'OPEN' ? 'Abierto' : item.status === 'IN_PROGRESS' ? 'En seguimiento' : item.status === 'CLOSED' ? 'Cerrado' : 'Remitido'} · Próxima acción: {item.estimatedDate || 'sin fecha'}</p></div><div className="flex gap-2">{item.status !== 'CLOSED' && <button className="btn-secondary min-h-10 px-3 py-2" onClick={() => setExpanded(!expanded)}><Plus size={16}/> Intervención</button>}{item.status !== 'CLOSED' && <button className="btn-secondary min-h-10 px-3 py-2" onClick={() => void close()}>Cerrar</button>}</div></div>
-    {expanded && <div className="mt-5 grid gap-4 border-t pt-5 md:grid-cols-2"><Field label="Situación identificada"><textarea className="field py-3" rows={3} value={situation} onChange={(e) => setSituation(e.target.value)}/></Field><Field label="Acciones realizadas"><textarea className="field py-3" rows={3} value={actions} onChange={(e) => setActions(e.target.value)}/></Field><Field label="Acuerdos"><textarea className="field py-3" rows={3} value={agreements} onChange={(e) => setAgreements(e.target.value)}/></Field><Field label="Fecha estimada"><input type="date" className="field" value={nextDate} onChange={(e) => setNextDate(e.target.value)}/></Field><button className="btn-primary md:col-span-2" onClick={() => void addEntry()}><Save size={17}/> Guardar intervención</button></div>}
-    {item.entries.length > 0 && <div className="mt-5 space-y-3 border-t pt-5">{item.entries.map((entry) => <div key={entry.id} className="rounded-xl bg-slate-50 p-4"><p className="text-xs font-bold text-slate-400">{entry.date} · {entry.professionalName}</p><p className="mt-2 text-sm font-semibold">{entry.actions}</p><p className="mt-1 text-sm text-slate-500">{entry.agreements}</p></div>)}</div>}
-  </article>;
+function FollowUpCard({
+  item,
+  professional,
+  onSaved,
+}: {
+  item: FollowUpCaseInput & {
+    entries: AthleteWorkspace['followUps'][number]['entries'];
+    updatedAt: string;
+  };
+  professional: string;
+  onSaved: () => Promise<void>;
+}) {
+  const question = useSystemInstrument('social-follow-up');
+  const [expanded, setExpanded] = useState(false);
+  const [situation, setSituation] = useState('');
+  const [actions, setActions] = useState('');
+  const [agreements, setAgreements] = useState('');
+  const [nextDate, setNextDate] = useState('');
+  async function addEntry() {
+    if (!situation || !actions) return;
+    const input: FollowUpEntryInput = {
+      id: createId(),
+      followUpCaseId: item.id,
+      date: new Date().toISOString().slice(0, 10),
+      situation,
+      actions,
+      agreements,
+      responsible: professional,
+      nextAction: agreements || null,
+      estimatedDate: nextDate || null,
+    };
+    await saveFollowUpEntryOffline(input, professional);
+    setExpanded(false);
+    await onSaved();
+  }
+  async function close() {
+    await saveFollowUpOffline({
+      id: item.id,
+      athleteId: item.athleteId,
+      motive: item.motive,
+      priority: item.priority,
+      status: 'CLOSED',
+      responsible: item.responsible,
+      nextAction: item.nextAction,
+      estimatedDate: item.estimatedDate,
+      version: item.version,
+    });
+    await onSaved();
+  }
+  return (
+    <article className="card p-5">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <span className={`rounded-full px-3 py-1 text-xs font-bold ${item.priority === 'HIGH' ? 'bg-red-50 text-red-700' : item.priority === 'MEDIUM' ? 'bg-amber-50 text-amber-700' : 'bg-blue-50 text-blue-700'}`}>{item.priority === 'HIGH' ? 'Alta' : item.priority === 'MEDIUM' ? 'Media' : 'Baja'}</span>
+          <h3 className="mt-3 text-lg font-bold text-pine-900">{item.motive}</h3>
+          <p className="mt-1 text-sm text-slate-500">
+            {item.status === 'OPEN' ? 'Abierto' : item.status === 'IN_PROGRESS' ? 'En seguimiento' : item.status === 'CLOSED' ? 'Cerrado' : 'Remitido'} · Próxima acción: {item.estimatedDate || 'sin fecha'}
+          </p>
+        </div>
+        <div className="flex gap-2">
+          {item.status !== 'CLOSED' && (
+            <button className="btn-secondary min-h-10 px-3 py-2" onClick={() => setExpanded(!expanded)}>
+              <Plus size={16} /> Intervención
+            </button>
+          )}
+          {item.status !== 'CLOSED' && (
+            <button className="btn-secondary min-h-10 px-3 py-2" onClick={() => void close()}>
+              Cerrar
+            </button>
+          )}
+        </div>
+      </div>
+      {expanded && (
+        <div className="mt-5 grid gap-4 border-t pt-5 md:grid-cols-2">
+          <Field label={question('situation')}>
+            <textarea className="field py-3" rows={3} value={situation} onChange={(e) => setSituation(e.target.value)} />
+          </Field>
+          <Field label={question('actions')}>
+            <textarea className="field py-3" rows={3} value={actions} onChange={(e) => setActions(e.target.value)} />
+          </Field>
+          <Field label={question('agreements')}>
+            <textarea className="field py-3" rows={3} value={agreements} onChange={(e) => setAgreements(e.target.value)} />
+          </Field>
+          <Field label={question('nextDate')}>
+            <input type="date" className="field" value={nextDate} onChange={(e) => setNextDate(e.target.value)} />
+          </Field>
+          <button className="btn-primary md:col-span-2" onClick={() => void addEntry()}>
+            <Save size={17} /> Guardar intervención
+          </button>
+        </div>
+      )}
+      {item.entries.length > 0 && (
+        <div className="mt-5 space-y-3 border-t pt-5">
+          {item.entries.map((entry) => (
+            <div key={entry.id} className="rounded-xl bg-slate-50 p-4">
+              <p className="text-xs font-bold text-slate-400">
+                {entry.date} · {entry.professionalName}
+              </p>
+              <p className="mt-2 text-sm font-semibold">{entry.actions}</p>
+              <p className="mt-1 text-sm text-slate-500">{entry.agreements}</p>
+            </div>
+          ))}
+        </div>
+      )}
+    </article>
+  );
 }
 
 function Observations({ athleteId, items, professional, onSaved }: { athleteId: string; items: ProfessionalObservationData[]; professional: string; onSaved: () => Promise<void> }) {
-  const [text, setText] = useState(''); const [type, setType] = useState('Seguimiento general'); const [visibility, setVisibility] = useState<ProfessionalObservationData['visibility']>('SOCIAL_WORK_ONLY');
-  async function add() { if (!text.trim()) return; await saveObservationOffline({ id: createId(), athleteId, date: new Date().toISOString().slice(0,10), type, observation: text, visibility }, professional); setText(''); await onSaved(); }
-  return <section className="mt-5"><h2 className="font-display text-3xl text-pine-900">Observaciones profesionales</h2><div className="card mt-5 grid gap-4 p-5 md:grid-cols-2"><Field label="Tipo"><input className="field" value={type} onChange={(e) => setType(e.target.value)}/></Field><Select value={visibility} onChange={(v) => setVisibility(v as ProfessionalObservationData['visibility'])} options={[['SOCIAL_WORK_ONLY','Solo Trabajo Social'],['AUTHORIZED_TEAM','Equipo autorizado'],['INSTITUTIONAL_SUMMARY','Institucional resumida']]}/><Field label="Observación profesional"><textarea className="field py-3" rows={4} value={text} onChange={(e) => setText(e.target.value)}/></Field><button className="btn-primary self-end" onClick={() => void add()}><StickyNote size={17}/> Guardar observación</button></div><div className="mt-5 space-y-3">{items.map((item) => <article key={item.id} className="card p-5"><p className="text-xs font-bold text-slate-400">{item.date} · {item.professionalName}</p><h3 className="mt-2 font-semibold text-pine-900">{item.type}</h3><p className="mt-2 text-sm leading-6 text-slate-600">{item.observation}</p><p className="mt-3 text-xs text-slate-400">Visibilidad: {item.visibility === 'SOCIAL_WORK_ONLY' ? 'Solo Trabajo Social' : item.visibility === 'AUTHORIZED_TEAM' ? 'Equipo autorizado' : 'Institucional resumida'}</p></article>)}</div></section>;
+  const question = useSystemInstrument('professional-observation');
+  const [text, setText] = useState('');
+  const [type, setType] = useState('Seguimiento general');
+  const [visibility, setVisibility] = useState<ProfessionalObservationData['visibility']>('SOCIAL_WORK_ONLY');
+  async function add() {
+    if (!text.trim()) return;
+    await saveObservationOffline(
+      {
+        id: createId(),
+        athleteId,
+        date: new Date().toISOString().slice(0, 10),
+        type,
+        observation: text,
+        visibility,
+      },
+      professional,
+    );
+    setText('');
+    await onSaved();
+  }
+  return (
+    <section className="mt-5">
+      <h2 className="font-display text-3xl text-pine-900">Observaciones profesionales</h2>
+      <div className="card mt-5 grid gap-4 p-5 md:grid-cols-2">
+        <Field label={question('type')}>
+          <input className="field" value={type} onChange={(e) => setType(e.target.value)} />
+        </Field>
+        <Select
+          label={question('visibility')}
+          value={visibility}
+          onChange={(v) => setVisibility(v as ProfessionalObservationData['visibility'])}
+          options={[
+            ['SOCIAL_WORK_ONLY', 'Solo Trabajo Social'],
+            ['AUTHORIZED_TEAM', 'Equipo autorizado'],
+            ['INSTITUTIONAL_SUMMARY', 'Institucional resumida'],
+          ]}
+        />
+        <Field label={question('observation')}>
+          <textarea className="field py-3" rows={4} value={text} onChange={(e) => setText(e.target.value)} />
+        </Field>
+        <button className="btn-primary self-end" onClick={() => void add()}>
+          <StickyNote size={17} /> Guardar observación
+        </button>
+      </div>
+      <div className="mt-5 space-y-3">
+        {items.map((item) => (
+          <article key={item.id} className="card p-5">
+            <p className="text-xs font-bold text-slate-400">
+              {item.date} · {item.professionalName}
+            </p>
+            <h3 className="mt-2 font-semibold text-pine-900">{item.type}</h3>
+            <p className="mt-2 text-sm leading-6 text-slate-600">{item.observation}</p>
+            <p className="mt-3 text-xs text-slate-400">Visibilidad: {item.visibility === 'SOCIAL_WORK_ONLY' ? 'Solo Trabajo Social' : item.visibility === 'AUTHORIZED_TEAM' ? 'Equipo autorizado' : 'Institucional resumida'}</p>
+          </article>
+        ))}
+      </div>
+    </section>
+  );
 }
 function Timeline({ workspace }: { workspace: AthleteWorkspace }) {
-  const local = useMemo(() => [...workspace.timeline, ...workspace.observations.map((item) => ({ id: item.id, date: item.date, type: 'OBSERVATION', title: `Observación: ${item.type}`, detail: item.observation, tone: 'neutral' as const }))].sort((a,b) => b.date.localeCompare(a.date)), [workspace]);
-  return <section className="mt-5"><h2 className="font-display text-3xl text-pine-900">Línea de tiempo</h2><div className="card mt-5 p-5">{local.length === 0 && <Empty text="La actividad del expediente aparecerá aquí."/>}{local.map((event) => <div key={event.id} className="relative border-l-2 border-pine-100 pb-7 pl-7 last:pb-0"><CircleDot className="absolute -left-[11px] top-0 bg-white text-coral-500" size={20}/><p className="text-xs font-bold text-slate-400">{new Date(event.date).toLocaleDateString('es-CO')}</p><h3 className="mt-1 font-semibold text-pine-900">{event.title}</h3>{event.detail && <p className="mt-1 text-sm text-slate-500">{event.detail}</p>}</div>)}</div></section>;
+  const local = useMemo(
+    () =>
+      [
+        ...workspace.timeline,
+        ...workspace.observations.map((item) => ({
+          id: item.id,
+          date: item.date,
+          type: 'OBSERVATION',
+          title: `Observación: ${item.type}`,
+          detail: item.observation,
+          tone: 'neutral' as const,
+        })),
+      ].sort((a, b) => b.date.localeCompare(a.date)),
+    [workspace],
+  );
+  return (
+    <section className="mt-5">
+      <h2 className="font-display text-3xl text-pine-900">Línea de tiempo</h2>
+      <div className="card mt-5 p-5">
+        {local.length === 0 && <Empty text="La actividad del expediente aparecerá aquí." />}
+        {local.map((event) => (
+          <div key={event.id} className="relative border-l-2 border-pine-100 pb-7 pl-7 last:pb-0">
+            <CircleDot className="absolute -left-[11px] top-0 bg-white text-coral-500" size={20} />
+            <p className="text-xs font-bold text-slate-400">{new Date(event.date).toLocaleDateString('es-CO')}</p>
+            <h3 className="mt-1 font-semibold text-pine-900">{event.title}</h3>
+            {event.detail && <p className="mt-1 text-sm text-slate-500">{event.detail}</p>}
+          </div>
+        ))}
+      </div>
+    </section>
+  );
 }
-function Field({ label, children }: { label: string; children: React.ReactNode }) { return <label><span className="mb-2 block text-sm font-semibold text-slate-700">{label}</span>{children}</label>; }
-function Select({ value, onChange, options }: { value: string; onChange: (v: string) => void; options: string[][] }) { return <label><span className="mb-2 block text-sm font-semibold text-slate-700">Estado / opción</span><select className="field" value={value} onChange={(e) => onChange(e.target.value)}>{options.map(([v,l]) => <option key={v} value={v}>{l}</option>)}</select></label>; }
-function Empty({ text }: { text: string }) { return <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-8 text-center text-sm text-slate-500"><AlertTriangle className="mx-auto mb-3 text-slate-300"/>{text}</div>; }
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <label>
+      <span className="mb-2 block text-sm font-semibold text-slate-700">{label}</span>
+      {children}
+    </label>
+  );
+}
+function Select({ label = 'Estado / opción', value, onChange, options }: { label?: string; value: string; onChange: (v: string) => void; options: string[][] }) {
+  return (
+    <label>
+      <span className="mb-2 block text-sm font-semibold text-slate-700">{label}</span>
+      <select className="field" value={value} onChange={(e) => onChange(e.target.value)}>
+        {options.map(([v, l]) => (
+          <option key={v} value={v}>
+            {l}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+function Empty({ text }: { text: string }) {
+  return (
+    <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-8 text-center text-sm text-slate-500">
+      <AlertTriangle className="mx-auto mb-3 text-slate-300" />
+      {text}
+    </div>
+  );
+}

@@ -1,6 +1,6 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import type { AdminUserData, AuditLogData, ConfigurableRuleData, DashboardData, ManageableCatalogItem, ManageableSportsCatalogs, ReportPopulationData, RoleCode, ScreeningInstrumentData } from '@socialapp/shared';
+import type { AdminUserData, AuditLogData, ConfigurableRuleData, DashboardData, ManageableCatalogItem, ManageableSportsCatalogs, ReportPopulationData, RoleCode, ScreeningInstrumentData, SystemInstrumentConfigurationData } from '@socialapp/shared';
 import * as argon2 from 'argon2';
 import { AuditService } from '../audit/audit.service';
 import { AthletesService } from '../athletes/athletes.service';
@@ -190,6 +190,34 @@ export class ManagementService {
   async instrumentOverview(): Promise<ScreeningInstrumentData[]> {
     const rows = await this.prisma.screeningInstrument.findMany({ where: { deletedAt: null }, include: { questions: { where: { deletedAt: null }, orderBy: { position: 'asc' } } }, orderBy: [{ name: 'asc' }, { version: 'desc' }] });
     return rows.map((item) => ({ id: item.id, name: item.name, version: item.version, ageGroup: item.ageGroup, active: item.active, questions: item.questions.map((question) => ({ id: question.id, dimension: question.dimension, prompt: question.prompt, type: question.type as any, options: question.options as string[], required: question.required, position: question.position })) }));
+  }
+
+  async systemInstrumentOverview(): Promise<SystemInstrumentConfigurationData[]> {
+    const rows = await this.prisma.systemInstrumentConfiguration.findMany({ orderBy: { kind: 'asc' } });
+    return rows.map((item) => ({
+      kind: item.kind,
+      version: item.version,
+      questions: item.questions as unknown as SystemInstrumentConfigurationData['questions'],
+      updatedAt: item.updatedAt.toISOString(),
+    }));
+  }
+
+  async saveSystemInstrument(userId: string, kind: string, questions: Array<{ id: string; prompt: string }>): Promise<SystemInstrumentConfigurationData> {
+    const validKinds = new Set(['social-record', 'socioeconomic-assessment', 'alert-assessment', 'social-follow-up', 'professional-observation', 'genogram', 'ecomap']);
+    if (!validKinds.has(kind)) throw new BadRequestException('El instrumento institucional no es válido.');
+    if (!Array.isArray(questions) || questions.length === 0 || questions.length > 40) throw new BadRequestException('El instrumento necesita entre 1 y 40 preguntas.');
+    const normalized = questions.map((question) => ({ id: String(question.id || '').trim(), prompt: String(question.prompt || '').trim() }));
+    if (normalized.some((question) => !/^[a-z][a-zA-Z0-9-]{1,79}$/.test(question.id) || !question.prompt || question.prompt.length > 500)) {
+      throw new BadRequestException('Revisa los identificadores y enunciados de las preguntas.');
+    }
+    if (new Set(normalized.map((question) => question.id)).size !== normalized.length) throw new BadRequestException('Las preguntas no pueden estar duplicadas.');
+    const saved = await this.prisma.systemInstrumentConfiguration.upsert({
+      where: { kind },
+      update: { questions: normalized as Prisma.InputJsonValue, updatedBy: userId, version: { increment: 1 } },
+      create: { kind, questions: normalized as Prisma.InputJsonValue, createdBy: userId, updatedBy: userId },
+    });
+    await this.audit.record({ actorUserId: userId, action: 'system-instrument.update', resourceType: 'SystemInstrumentConfiguration', resourceId: saved.id, metadata: { kind, version: saved.version } });
+    return { kind: saved.kind, version: saved.version, questions: normalized, updatedAt: saved.updatedAt.toISOString() };
   }
   async updateInstrumentStatus(userId: string, id: string, active: boolean) {
     const item = await this.prisma.screeningInstrument.findFirst({ where: { id, deletedAt: null } });

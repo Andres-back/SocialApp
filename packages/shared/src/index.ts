@@ -367,6 +367,18 @@ export interface ScreeningInstrumentInput {
   questions: Array<Omit<ScreeningQuestionData, 'position'> & { position?: number }>;
 }
 
+export interface SystemInstrumentQuestionData {
+  id: string;
+  prompt: string;
+}
+
+export interface SystemInstrumentConfigurationData {
+  kind: string;
+  version: number;
+  questions: SystemInstrumentQuestionData[];
+  updatedAt?: string;
+}
+
 export type ScreeningAgeGroup = '6 a 9 años' | '10 a 13 años' | '14 a 17 años';
 
 export function screeningAgeGroup(age: number): ScreeningAgeGroup | null {

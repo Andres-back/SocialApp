@@ -7,6 +7,7 @@ import { z } from 'zod';
 import type { AthleteRecord, SocialRecordInput } from '@socialapp/shared';
 import { loadAthlete, loadSocialRecord, saveSocialRecordOffline } from '../features/athletes/athlete-repository';
 import { useAuth } from '../features/auth/useAuth';
+import { useSystemInstrument } from '../features/instruments/useSystemInstrument';
 import { useConnection } from '../hooks/useConnection';
 import { db } from '../lib/db';
 import { createId } from '../lib/uuid';
@@ -51,6 +52,7 @@ export function SocialRecordFormPage() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const online = useConnection();
+  const question = useSystemInstrument('social-record');
   const [athlete, setAthlete] = useState<AthleteRecord>();
   const [recordId, setRecordId] = useState<string>(() => createId());
   const [recordVersion, setRecordVersion] = useState(0);
@@ -139,27 +141,27 @@ export function SocialRecordFormPage() {
       <form className="mt-6" onSubmit={handleSubmit(complete)}>
         {step === 1 && <section className="card p-5 md:p-8">
           <h2 className="font-display text-3xl text-pine-900">Composición familiar</h2>
-          <p className="mt-2 text-sm text-slate-500">¿Con quién vive actualmente el deportista?</p>
+          <p className="mt-2 text-sm text-slate-500">{question('livingWith')}</p>
           <div className="mt-5 grid gap-3 sm:grid-cols-2">{livingOptions.map(([value, label]) => <CheckOption key={value} value={value} label={label} registration={register('livingWith')} />)}</div>
           {errors.livingWith?.message && <p className="mt-3 text-sm text-red-600">{errors.livingWith.message}</p>}
-          <div className="mt-8 flex items-center justify-between border-t border-slate-100 pt-7"><div><h3 className="font-semibold text-pine-900">Integrantes del hogar</h3><p className="mt-1 text-xs text-slate-500">Agrégalos individualmente cuando tengas la información.</p></div><button type="button" className="btn-secondary px-4" onClick={() => append({ id: createId(), name: '', relationship: '', approximateAge: null, livesWithAthlete: true, occupation: '', relationshipQuality: 'ADEQUATE' })}><Plus size={17} /> Agregar</button></div>
+          <div className="mt-8 flex items-center justify-between border-t border-slate-100 pt-7"><div><h3 className="font-semibold text-pine-900">{question('householdMembers')}</h3><p className="mt-1 text-xs text-slate-500">Agrégalos individualmente cuando tengas la información.</p></div><button type="button" className="btn-secondary px-4" onClick={() => append({ id: createId(), name: '', relationship: '', approximateAge: null, livesWithAthlete: true, occupation: '', relationshipQuality: 'ADEQUATE' })}><Plus size={17} /> Agregar</button></div>
           <div className="mt-5 space-y-4">{fields.length === 0 && <p className="rounded-xl bg-sand-50 p-5 text-center text-sm text-slate-500">Aún no has agregado integrantes.</p>}{fields.map((field, index) => <div key={field.id} className="rounded-2xl border border-slate-100 bg-sand-50 p-4"><div className="mb-4 flex justify-between"><p className="text-sm font-bold text-pine-900">Integrante {index + 1}</p><button type="button" aria-label={`Eliminar integrante ${index + 1}`} className="rounded-lg p-2 text-red-500 hover:bg-red-50" onClick={() => remove(index)}><Trash2 size={17} /></button></div><div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3"><SmallField label="Nombre *"><input className="field" {...register(`householdMembers.${index}.name`)} /></SmallField><SmallField label="Parentesco *"><input className="field" {...register(`householdMembers.${index}.relationship`)} /></SmallField><SmallField label="Edad aproximada"><input type="number" className="field" {...register(`householdMembers.${index}.approximateAge`, { setValueAs: (value) => value === '' ? null : Number(value) })} /></SmallField><SmallField label="Ocupación"><input className="field" {...register(`householdMembers.${index}.occupation`)} /></SmallField><SmallField label="Relación"><select className="field" {...register(`householdMembers.${index}.relationshipQuality`)}><option value="CLOSE">Cercana</option><option value="ADEQUATE">Adecuada</option><option value="DISTANT">Distante</option><option value="CONFLICTIVE">Conflictiva</option><option value="UNKNOWN">Sin información</option></select></SmallField><label className="flex min-h-12 items-center gap-3 rounded-xl bg-white px-4"><input type="checkbox" className="h-5 w-5 accent-pine-700" {...register(`householdMembers.${index}.livesWithAthlete`)} /><span className="text-sm font-medium">Vive con el deportista</span></label></div></div>)}</div>
         </section>}
 
         {step === 2 && <section className="card p-5 md:p-8">
           <h2 className="font-display text-3xl text-pine-900">Cuidado y relaciones</h2>
-          <label className="mt-7 block"><span className="text-sm font-semibold text-slate-700">Cuidador principal *</span><select className="field mt-2" {...register('primaryCaregiver')}><option value="MOTHER">Madre</option><option value="FATHER">Padre</option><option value="BOTH">Ambos</option><option value="GRANDPARENT">Abuelo/a</option><option value="OTHER_RELATIVE">Otro familiar</option><option value="OTHER">Otro</option></select></label>
+          <label className="mt-7 block"><span className="text-sm font-semibold text-slate-700">{question('primaryCaregiver')} *</span><select className="field mt-2" {...register('primaryCaregiver')}><option value="MOTHER">Madre</option><option value="FATHER">Padre</option><option value="BOTH">Ambos</option><option value="GRANDPARENT">Abuelo/a</option><option value="OTHER_RELATIVE">Otro familiar</option><option value="OTHER">Otro</option></select></label>
           {watch('primaryCaregiver') === 'OTHER' && <label className="mt-5 block"><span className="text-sm font-semibold text-slate-700">¿Cuál?</span><input className="field mt-2" {...register('otherCaregiver')} /></label>}
-          <fieldset className="mt-8"><legend className="text-sm font-semibold text-slate-700">¿Cómo considera actualmente las relaciones familiares?</legend><div className="mt-4 grid gap-3 sm:grid-cols-2">{[['VERY_GOOD', 'Muy buenas'], ['GOOD', 'Buenas'], ['REGULAR', 'Regulares'], ['DIFFICULT', 'Difíciles']].map(([value, label]) => <label key={value} className="flex min-h-14 cursor-pointer items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 hover:border-pine-300"><input type="radio" value={value} className="h-5 w-5 accent-pine-700" {...register('familyRelationships')} /><span className="font-medium text-slate-700">{label}</span></label>)}</div></fieldset>
+          <fieldset className="mt-8"><legend className="text-sm font-semibold text-slate-700">{question('familyRelationships')}</legend><div className="mt-4 grid gap-3 sm:grid-cols-2">{[['VERY_GOOD', 'Muy buenas'], ['GOOD', 'Buenas'], ['REGULAR', 'Regulares'], ['DIFFICULT', 'Difíciles']].map(([value, label]) => <label key={value} className="flex min-h-14 cursor-pointer items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 hover:border-pine-300"><input type="radio" value={value} className="h-5 w-5 accent-pine-700" {...register('familyRelationships')} /><span className="font-medium text-slate-700">{label}</span></label>)}</div></fieldset>
         </section>}
 
         {step === 3 && <section className="card p-5 md:p-8">
           <h2 className="font-display text-3xl text-pine-900">Redes de apoyo</h2>
-          <p className="mt-2 text-sm leading-6 text-slate-500">Cuando el deportista o la familia necesita ayuda, cuenta principalmente con:</p>
+          <p className="mt-2 text-sm leading-6 text-slate-500">{question('supportNetworks')}</p>
           <div className="mt-5 grid gap-3 sm:grid-cols-2">{networkOptions.map(([value, label]) => <CheckOption key={value} value={value} label={label} registration={register('supportNetworks')} />)}</div>
           {errors.supportNetworks?.message && <p className="mt-3 text-sm text-red-600">{errors.supportNetworks.message}</p>}
           {watch('supportNetworks').includes('OTHER') && <label className="mt-5 block"><span className="text-sm font-semibold text-slate-700">Otra red de apoyo</span><input className="field mt-2" {...register('otherSupportNetwork')} /></label>}
-          <label className="mt-8 block border-t border-slate-100 pt-7"><span className="text-sm font-semibold text-slate-700">Observación profesional opcional</span><span className="mt-1 block text-xs text-slate-500">Este campo corresponde a la valoración de Trabajo Social y no se mezcla con las respuestas informadas.</span><textarea rows={5} className="field mt-3 py-3" {...register('professionalObservation')} /></label>
+          <label className="mt-8 block border-t border-slate-100 pt-7"><span className="text-sm font-semibold text-slate-700">{question('professionalObservation')}</span><span className="mt-1 block text-xs text-slate-500">Este campo corresponde a la valoración de Trabajo Social y no se mezcla con las respuestas informadas.</span><textarea rows={5} className="field mt-3 py-3" {...register('professionalObservation')} /></label>
         </section>}
 
         <div className="sticky bottom-4 z-20 mt-5 flex items-center justify-between gap-3 rounded-2xl border border-white bg-white/90 p-4 shadow-soft backdrop-blur">

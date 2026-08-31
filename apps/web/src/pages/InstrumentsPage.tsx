@@ -1,9 +1,10 @@
-import { ArrowDown, ArrowRight, ArrowUp, BookOpenCheck, Edit3, FileText, Home, Network, Plus, RotateCcw, Save, Search, ShieldAlert, StickyNote, Trash2, UsersRound, type LucideIcon } from 'lucide-react';
+import { ArrowDown, ArrowRight, ArrowUp, BookOpenCheck, Edit3, Eye, FileText, Home, Network, Plus, RotateCcw, Save, Search, ShieldAlert, StickyNote, Trash2, UsersRound, type LucideIcon } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import type { AthleteRecord, ScreeningInstrumentData, ScreeningInstrumentInput, ScreeningQuestionData } from '@socialapp/shared';
+import type { AthleteRecord, ScreeningInstrumentData, ScreeningInstrumentInput, ScreeningQuestionData, SystemInstrumentConfigurationData, SystemInstrumentQuestionData } from '@socialapp/shared';
 import { loadAthletes } from '../features/athletes/athlete-repository';
-import { screeningInstrumentPath, SYSTEM_INSTRUMENTS, systemInstrumentPath, type SystemInstrumentKind } from '../features/instruments/instrument-catalog';
+import { configuredSystemInstrument, screeningInstrumentPath, SYSTEM_INSTRUMENTS, systemInstrumentPath, type SystemInstrumentDefinition, type SystemInstrumentKind } from '../features/instruments/instrument-catalog';
+import { invalidateSystemInstrumentConfigurations, loadSystemInstrumentConfigurations } from '../features/instruments/useSystemInstrument';
 import { useAuth } from '../features/auth/useAuth';
 import { loadManageableInstruments } from '../features/work/work-repository';
 import { api } from '../lib/api';
@@ -35,6 +36,7 @@ export function InstrumentsPage() {
   const [searchParams] = useSearchParams();
   const requestedAthleteId = searchParams.get('athleteId') ?? '';
   const [items, setItems] = useState<ScreeningInstrumentData[]>([]);
+  const [systemConfigurations, setSystemConfigurations] = useState<SystemInstrumentConfigurationData[]>([]);
   const [athletes, setAthletes] = useState<AthleteRecord[]>([]);
   const [athleteSearch, setAthleteSearch] = useState('');
   const [selectedAthleteId, setSelectedAthleteId] = useState(requestedAthleteId);
@@ -46,10 +48,13 @@ export function InstrumentsPage() {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
+  const [previewingSystem, setPreviewingSystem] = useState<SystemInstrumentDefinition>();
+  const [editingSystem, setEditingSystem] = useState<SystemInstrumentDefinition>();
+  const [systemQuestions, setSystemQuestions] = useState<SystemInstrumentQuestionData[]>([]);
 
   const load = useCallback(async () => {
-    const [forms, people] = await Promise.all([loadManageableInstruments(), loadAthletes()]);
-    setItems(forms); setAthletes(people);
+    const [forms, people, configurations] = await Promise.all([loadManageableInstruments(), loadAthletes(), loadSystemInstrumentConfigurations(true)]);
+    setItems(forms); setAthletes(people); setSystemConfigurations(configurations);
     if (requestedAthleteId && people.some((person) => person.id === requestedAthleteId)) setSelectedAthleteId(requestedAthleteId);
   }, [requestedAthleteId]);
   useEffect(() => {
@@ -70,7 +75,7 @@ export function InstrumentsPage() {
     return athletes.filter((person) => !term || `${person.firstNames} ${person.lastNames} ${person.internalCode}`.toLocaleLowerCase('es').includes(term));
   }, [athletes, athleteSearch]);
   const selectedAthlete = athletes.find((person) => person.id === selectedAthleteId);
-  const availableSystemInstruments = SYSTEM_INSTRUMENTS.filter((instrument) => can(instrument.permission));
+  const availableSystemInstruments = SYSTEM_INSTRUMENTS.filter((instrument) => can(instrument.permission)).map((instrument) => configuredSystemInstrument(instrument, systemConfigurations));
   function requireAthlete(): string | undefined {
     if (selectedAthleteId) return selectedAthleteId;
     setError('Selecciona primero el deportista al que aplicarás el instrumento.');
@@ -79,6 +84,29 @@ export function InstrumentsPage() {
   }
   function applySystem(kind: SystemInstrumentKind) { const athleteId = requireAthlete(); if (athleteId) navigate(systemInstrumentPath(kind, athleteId)); }
   function applyScreening(instrumentId: string) { const athleteId = requireAthlete(); if (athleteId) navigate(screeningInstrumentPath(instrumentId, athleteId)); }
+  function previewSystem(instrument: SystemInstrumentDefinition) {
+    setEditingSystem(undefined); setPreviewingSystem(instrument); setSystemQuestions(instrument.questions); setError('');
+    window.requestAnimationFrame(() => document.getElementById('detalle-instrumento-institucional')?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+  }
+  function editSystem(instrument: SystemInstrumentDefinition) {
+    setPreviewingSystem(instrument); setEditingSystem(instrument); setSystemQuestions(instrument.questions.map((question) => ({ ...question }))); setError('');
+    window.requestAnimationFrame(() => document.getElementById('detalle-instrumento-institucional')?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+  }
+  async function saveSystemQuestions() {
+    if (!editingSystem) return;
+    if (systemQuestions.some((question) => !question.prompt.trim())) return setError('Completa el texto de todas las preguntas.');
+    setSaving(true); setError(''); setMessage('');
+    try {
+      const saved = await api.saveSystemInstrument(editingSystem.kind, systemQuestions.map((question) => ({ ...question, prompt: question.prompt.trim() })));
+      invalidateSystemInstrumentConfigurations();
+      const configurations = await loadSystemInstrumentConfigurations(true);
+      setSystemConfigurations(configurations);
+      const updated = configuredSystemInstrument(editingSystem, [saved]);
+      setPreviewingSystem(updated); setEditingSystem(undefined); setSystemQuestions(updated.questions);
+      setMessage('Preguntas de “' + editingSystem.name + '” actualizadas y sincronizadas para todos los usuarios.');
+    } catch (reason) { setError(reason instanceof Error ? reason.message : 'No fue posible actualizar las preguntas.'); }
+    finally { setSaving(false); }
+  }
 
   function beginCreate() {
     setEditing(undefined); setName(''); setAgeGroup(ageGroups[0]!); setQuestions([blankQuestion()]); setError(''); setOpen(true);
@@ -139,7 +167,12 @@ export function InstrumentsPage() {
       <div className="mt-4 grid max-h-64 gap-2 overflow-y-auto sm:grid-cols-2 lg:grid-cols-3">{visibleAthletes.map((person) => <button key={person.id} type="button" onClick={() => { setSelectedAthleteId(person.id); setError(''); }} className={`rounded-xl border p-3 text-left transition ${selectedAthleteId === person.id ? 'border-pine-600 bg-pine-50 ring-2 ring-pine-100' : 'border-slate-200 bg-white hover:border-pine-200'}`}><span className="block text-sm font-semibold text-pine-900">{person.firstNames} {person.lastNames}</span><span className="mt-1 block text-xs text-slate-500">{person.internalCode} · {person.age} años · {person.sportName}</span></button>)}</div>
       {visibleAthletes.length === 0 && <p className="py-8 text-center text-sm text-slate-500">No encontramos deportistas con esa búsqueda.</p>}
     </section>
-    <section className="mt-8"><div><p className="eyebrow">Paso 2</p><h2 className="mt-1 font-display text-3xl text-pine-900">Instrumentos institucionales</h2><p className="mt-2 text-sm text-slate-500">Selecciona el formulario que deseas diligenciar o actualizar.</p></div><div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-3">{availableSystemInstruments.map((instrument) => { const Icon = systemIcons[instrument.kind]; return <article key={instrument.kind} className="card flex flex-col p-5"><div className="flex items-start justify-between gap-3"><span className="grid h-11 w-11 place-items-center rounded-xl bg-pine-50 text-pine-700"><Icon size={21}/></span><span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-500">v{instrument.version}</span></div><p className="mt-4 text-xs font-bold uppercase tracking-wide text-coral-600">{instrument.area}</p><h3 className="mt-1 text-lg font-bold text-pine-900">{instrument.name}</h3><p className="mt-2 flex-1 text-sm leading-6 text-slate-500">{instrument.description}</p><button className="btn-primary mt-5 w-full" onClick={() => applySystem(instrument.kind)}>Aplicar <ArrowRight size={17}/></button></article>; })}</div></section>
+    <section className="mt-8"><div><p className="eyebrow">Paso 2</p><h2 className="mt-1 font-display text-3xl text-pine-900">Instrumentos institucionales</h2><p className="mt-2 text-sm text-slate-500">Puedes revisar o ajustar sus preguntas antes de aplicarlos. Los cambios se sincronizan con el equipo.</p></div><div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-3">{availableSystemInstruments.map((instrument) => { const Icon = systemIcons[instrument.kind]; return <article key={instrument.kind} className="card flex flex-col p-5"><div className="flex items-start justify-between gap-3"><span className="grid h-11 w-11 place-items-center rounded-xl bg-pine-50 text-pine-700"><Icon size={21}/></span><span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-500">v{instrument.version}</span></div><p className="mt-4 text-xs font-bold uppercase tracking-wide text-coral-600">{instrument.area}</p><h3 className="mt-1 text-lg font-bold text-pine-900">{instrument.name}</h3><p className="mt-2 flex-1 text-sm leading-6 text-slate-500">{instrument.description}</p><p className="mt-3 text-xs font-semibold text-slate-400">{instrument.questions.length} campos o preguntas</p><div className="mt-5 grid grid-cols-2 gap-2"><button className="btn-secondary min-h-10 px-3 py-2" onClick={() => previewSystem(instrument)}><Eye size={16}/> Vista previa</button><button className="btn-secondary min-h-10 px-3 py-2" onClick={() => editSystem(instrument)}><Edit3 size={16}/> Editar preguntas</button><button className="btn-primary col-span-2 min-h-10 py-2" onClick={() => applySystem(instrument.kind)}>Aplicar <ArrowRight size={17}/></button></div></article>; })}</div></section>
+    {previewingSystem && <section id="detalle-instrumento-institucional" className="card scroll-mt-24 mt-6 p-5 md:p-7">
+      <div className="flex flex-wrap items-start justify-between gap-3"><div><p className="text-xs font-bold uppercase tracking-wide text-coral-600">{editingSystem ? 'Editar preguntas institucionales' : 'Vista previa'}</p><h2 className="mt-1 font-display text-3xl text-pine-900">{previewingSystem.name}</h2><p className="mt-2 text-sm text-slate-500">{editingSystem ? 'Puedes cambiar los enunciados. La estructura y el tipo de dato permanecen protegidos para conservar los expedientes existentes.' : 'Así verá la trabajadora social las ' + systemQuestions.length + ' preguntas antes de aplicar el formulario.'}</p></div><button className="btn-secondary" onClick={() => { setPreviewingSystem(undefined); setEditingSystem(undefined); }}>Cerrar</button></div>
+      <div className="mt-6 space-y-3">{systemQuestions.map((question, index) => <article key={question.id} className="rounded-2xl border border-slate-200 bg-white p-4"><div className="flex gap-3"><span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-coral-50 text-xs font-bold text-coral-700">{index + 1}</span>{editingSystem ? <label className="flex-1"><span className="sr-only">Pregunta {index + 1}</span><textarea className="field py-3" rows={2} value={question.prompt} onChange={(event) => setSystemQuestions((current) => current.map((item) => item.id === question.id ? { ...item, prompt: event.target.value } : item))}/><span className="mt-1 block text-xs text-slate-400">Campo protegido: {question.id}</span></label> : <p className="pt-1 text-sm font-semibold leading-6 text-pine-900">{question.prompt}</p>}</div></article>)}</div>
+      <div className="mt-6 flex flex-wrap justify-end gap-3">{editingSystem ? <><button className="btn-secondary" onClick={() => { setEditingSystem(undefined); setSystemQuestions(previewingSystem.questions); }}>Cancelar edición</button><button className="btn-primary" disabled={saving} onClick={() => void saveSystemQuestions()}><Save size={17}/> {saving ? 'Guardando…' : 'Guardar y sincronizar'}</button></> : <><button className="btn-secondary" onClick={() => editSystem(previewingSystem)}><Edit3 size={16}/> Editar preguntas</button><button className="btn-primary" onClick={() => applySystem(previewingSystem.kind)}>Aplicar <ArrowRight size={17}/></button></>}</div>
+    </section>}
     <section className="mt-9"><div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between"><div><p className="eyebrow">Cuestionarios configurables</p><h2 className="mt-1 font-display text-3xl text-pine-900">Tamizajes y entrevistas</h2><p className="mt-2 max-w-3xl text-sm text-slate-500">Puedes aplicarlos individualmente o incluirlos en una brigada. Al editar se crea una versión nueva y los resultados anteriores permanecen intactos.</p></div><button className="btn-secondary shrink-0" onClick={beginCreate}><Plus size={18}/> Crear cuestionario</button></div></section>
     {open && <section className="card mt-6 p-5 md:p-7">
       <div className="flex flex-wrap items-start justify-between gap-3"><div><p className="text-xs font-bold uppercase tracking-wide text-coral-600">{editing ? `Editar ${editing.name} v${editing.version}` : 'Nuevo cuestionario'}</p><h2 className="mt-1 font-display text-3xl text-pine-900">{editing ? 'Crear nueva versión' : 'Configurar instrumento'}</h2></div><button className="btn-secondary" onClick={() => setOpen(false)}>Cancelar</button></div>

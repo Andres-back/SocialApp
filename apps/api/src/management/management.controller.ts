@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Req, Res } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Put, Query, Req, Res } from '@nestjs/common';
 import { PERMISSIONS } from '@socialapp/shared';
 import type { Request, Response } from 'express';
 import type { RequestUser } from '../iam/authenticated-user';
@@ -78,6 +78,20 @@ export class ManagementController {
   @Get('instruments/manage')
   @RequirePermissions(PERMISSIONS.SCREENING_WRITE)
   instruments() { return this.management.instrumentOverview(); }
+
+  @Get('instruments/system')
+  @RequirePermissions(PERMISSIONS.SCREENING_READ)
+  systemInstruments() { return this.management.systemInstrumentOverview(); }
+
+  @Put('instruments/system/:kind')
+  @RequirePermissions(PERMISSIONS.SCREENING_WRITE)
+  saveSystemInstrument(
+    @Param('kind') kind: string,
+    @Body() body: { questions: Array<{ id: string; prompt: string }> },
+    @Req() request: Request & { user: RequestUser },
+  ) {
+    return this.management.saveSystemInstrument(request.user.id, kind, body.questions);
+  }
 
   @Post('instruments')
   @RequirePermissions(PERMISSIONS.SCREENING_WRITE)
