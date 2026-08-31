@@ -80,17 +80,25 @@ export class AthletesService {
       email: dto.guardian.email?.trim() || null,
     } : null;
     const athlete = existing
-      ? await this.prisma.athlete.update({
-          where: { id: dto.id },
-          data: {
-            ...common,
-            version: { increment: 1 },
-            ...(guardian ? { guardian: { upsert: {
-              create: { ...guardian, createdBy: userId, updatedBy: userId },
+      ? await this.prisma.$transaction(async (transaction) => {
+          const claimed = await transaction.athlete.updateMany({
+            where: { id: dto.id, version: baseVersion, deletedAt: null },
+            data: { ...common, version: { increment: 1 } },
+          });
+          if (claimed.count !== 1) {
+            const current = await transaction.athlete.findUnique({ where: { id: dto.id }, select: { version: true } });
+            throw new ConflictException({ message: 'Existe una versión más reciente del deportista.', serverVersion: current?.version });
+          }
+          if (guardian) {
+            await transaction.guardian.upsert({
+              where: { athleteId: dto.id },
+              create: { athleteId: dto.id, ...guardian, createdBy: userId, updatedBy: userId },
               update: { ...guardian, updatedBy: userId, version: { increment: 1 } },
-            } } } : {}),
-          },
-          include: athleteInclude,
+            });
+          }
+          const updated = await transaction.athlete.findUnique({ where: { id: dto.id }, include: athleteInclude });
+          if (!updated) throw new NotFoundException('No encontramos este deportista.');
+          return updated;
         })
       : await this.prisma.athlete.create({
           data: {

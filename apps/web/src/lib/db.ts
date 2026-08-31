@@ -7,6 +7,7 @@ export interface LocalMutation extends SyncMutation {
   lastError?: string;
   nextAttemptAt?: string;
   rejectionKind?: 'server' | 'transport';
+  baseSnapshot?: unknown;
 }
 
 export interface DraftRecord {

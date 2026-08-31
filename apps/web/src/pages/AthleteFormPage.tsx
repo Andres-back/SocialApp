@@ -8,6 +8,7 @@ import type { AthleteInput, AthleteRecord, CatalogItem, SportsCatalogs } from '@
 import { loadAthlete, loadCatalogs, saveAthleteOffline } from '../features/athletes/athlete-repository';
 import { useConnection } from '../hooks/useConnection';
 import { createId } from '../lib/uuid';
+import { api } from '../lib/api';
 
 const optionalText = z.string().trim().max(180).optional();
 const schema = z.object({
@@ -61,6 +62,7 @@ export function AthleteFormPage() {
   const [catalogs, setCatalogs] = useState<SportsCatalogs | null>(null);
   const [recordVersion, setRecordVersion] = useState(0);
   const [loadError, setLoadError] = useState('');
+  const [collaborationNotice, setCollaborationNotice] = useState('');
   const generatedCode = useMemo(() => `DEP-${Date.now().toString().slice(-6)}`, []);
   const { register, handleSubmit, reset, formState: { errors, isSubmitting } } = useForm<FormValues>({
     resolver: zodResolver(schema),
@@ -106,6 +108,29 @@ export function AthleteFormPage() {
     return () => { cancelled = true; };
   }, [id, reset]);
 
+  useEffect(() => {
+    if (!id || !online || recordVersion === 0) return;
+    let cancelled = false;
+    const checkRemoteVersion = async () => {
+      try {
+        const remote = await api.getAthlete(id);
+        if (!cancelled && remote.version > recordVersion) {
+          setCollaborationNotice('Otra persona actualizó este expediente mientras lo tienes abierto. Puedes continuar: al guardar combinaremos automáticamente los campos diferentes.');
+        }
+      } catch {
+        // La edición local continúa disponible si la comprobación temporal falla.
+      }
+    };
+    const remoteRefresh = () => { void checkRemoteVersion(); };
+    window.addEventListener('socialapp:remote-refresh', remoteRefresh);
+    const timer = window.setInterval(remoteRefresh, 15_000);
+    return () => {
+      cancelled = true;
+      window.removeEventListener('socialapp:remote-refresh', remoteRefresh);
+      window.clearInterval(timer);
+    };
+  }, [id, online, recordVersion]);
+
   async function submit(values: FormValues) {
     if (!catalogs) return setLoadError('Los catálogos no están disponibles.');
     const catalogFallback = (items: CatalogItem[]) => items.find((item) => item.name === 'Por definir')?.id ?? items[0]?.id ?? '';
@@ -140,6 +165,7 @@ export function AthleteFormPage() {
       <Link to={id ? `/deportistas/${id}` : '/deportistas'} className="inline-flex items-center gap-2 text-sm font-semibold text-pine-700"><ArrowLeft size={17} /> Volver</Link>
       <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between"><div><p className="text-sm font-semibold text-coral-600">Expediente único</p><h1 className="mt-1 font-display text-4xl text-pine-900">{id ? 'Editar deportista' : 'Nuevo deportista'}</h1><p className="mt-2 text-sm text-slate-500">Solo nombres y fecha de nacimiento son obligatorios. Puedes completar el resto después.</p></div>{!online && <span className="inline-flex items-center gap-2 rounded-full bg-amber-50 px-4 py-2 text-xs font-semibold text-amber-800"><WifiOff size={15} /> Guardado sin conexión</span>}</div>
       {loadError && <p role="alert" className="mt-5 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">{loadError}</p>}
+      {collaborationNotice && <p role="status" className="mt-5 rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm leading-6 text-sky-800">{collaborationNotice}</p>}
       <form className="mt-7 space-y-6" onSubmit={handleSubmit(submit)}>
         <FormSection title="Identificación" description="Datos básicos para reconocer al deportista.">
           <label><span className="text-sm font-semibold text-slate-700">Código interno (automático)</span><input className={inputClass} placeholder="Se genera automáticamente" {...register('internalCode')} /><FieldError message={errors.internalCode?.message} /></label>

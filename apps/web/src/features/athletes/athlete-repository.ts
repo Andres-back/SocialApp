@@ -3,6 +3,7 @@ import { api, ApiRequestError } from '../../lib/api';
 import { db } from '../../lib/db';
 import { synchronize } from '../../lib/sync-engine';
 import { createId } from '../../lib/uuid';
+import { athleteRecordToInput } from './athlete-merge';
 
 function ageFromDate(value: string) {
   const today = new Date();
@@ -32,12 +33,12 @@ export async function loadAthletes(search = ''): Promise<AthleteRecord[]> {
   if (navigator.onLine) {
     try {
       const remote = await api.listAthletes(search);
+      const queued = await db.syncQueue.where('entityType').equals('athlete')
+        .filter((item) => ['pending', 'processing', 'error', 'conflict'].includes(item.status))
+        .toArray();
+      const dirtyIds = new Set(queued.map((item) => item.entityId));
       if (!search) {
-        const [local, queued] = await Promise.all([
-          db.athletes.toArray(),
-          db.syncQueue.where('entityType').equals('athlete').filter((item) => ['pending', 'processing', 'error', 'conflict'].includes(item.status)).toArray(),
-        ]);
-        const dirtyIds = new Set(queued.map((item) => item.entityId));
+        const local = await db.athletes.toArray();
         const remoteIds = new Set(remote.map((item) => item.id));
         const staleIds = local
           .filter((item) => !remoteIds.has(item.id) && !dirtyIds.has(item.id) && (!item.syncStatus || item.syncStatus === 'synced'))
@@ -47,7 +48,7 @@ export async function loadAthletes(search = ''): Promise<AthleteRecord[]> {
           await db.athletes.bulkDelete(staleIds);
         });
       } else {
-        await db.athletes.bulkPut(remote.map((item) => ({ ...item, syncStatus: 'synced' as const })));
+        await db.athletes.bulkPut(remote.filter((item) => !dirtyIds.has(item.id)).map((item) => ({ ...item, syncStatus: 'synced' as const })));
       }
     } catch {
       // The local replica remains available.
@@ -70,6 +71,7 @@ export async function loadAthlete(id: string): Promise<AthleteRecord | undefined
       } catch {
         // The local record remains usable while synchronization is retried.
       }
+      if (local?.syncStatus && local.syncStatus !== 'synced') return local;
     }
     if (local && (!local.syncStatus || local.syncStatus === 'synced')) {
       try {
@@ -129,6 +131,7 @@ export async function saveAthleteOffline(input: AthleteInput, catalogs: SportsCa
       baseVersion: input.version,
       occurredAt: now,
       payload: input,
+      baseSnapshot: existing ? athleteRecordToInput(existing) : input,
       status: 'pending',
       attempts: 0,
     });

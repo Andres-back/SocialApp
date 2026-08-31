@@ -104,6 +104,16 @@ describe('athlete offline repository', () => {
     expect(await db.athletes.get(athlete.id)).toMatchObject({ syncStatus: 'pending' });
   });
 
+  it('does not overwrite a pending athlete while searching online', async () => {
+    await saveAthleteOffline(athlete, catalogs);
+    Object.defineProperty(navigator, 'onLine', { configurable: true, value: true });
+    vi.spyOn(api, 'listAthletes').mockResolvedValue([{ ...(await db.athletes.get(athlete.id))!, firstNames: 'Versión remota', syncStatus: 'synced' }]);
+
+    await loadAthletes('Ana');
+
+    expect(await db.athletes.get(athlete.id)).toMatchObject({ firstNames: 'Ana', syncStatus: 'pending' });
+  });
+
   it('drops a stale synced athlete when its detail endpoint returns 404', async () => {
     await saveAthleteOffline(athlete, catalogs);
     await db.athletes.update(athlete.id, { syncStatus: 'synced' });

@@ -21,9 +21,11 @@ export function AthleteDetailPage() {
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState('');
   useEffect(() => {
-    void (async () => {
+    let cancelled = false;
+    const refreshAthlete = async () => {
       try {
         const athleteData = await loadAthlete(id);
+        if (cancelled) return;
         if (!athleteData) {
           setAthlete(undefined);
           return;
@@ -40,9 +42,18 @@ export function AthleteDetailPage() {
           ? { ...athleteData, hasSocialRecord: true, socialRecordUpdatedAt: socialRecord.updatedAt }
           : athleteData);
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
-    })();
+    };
+    const remoteRefresh = () => { void refreshAthlete(); };
+    void refreshAthlete();
+    window.addEventListener('socialapp:remote-refresh', remoteRefresh);
+    const timer = window.setInterval(remoteRefresh, 15_000);
+    return () => {
+      cancelled = true;
+      window.removeEventListener('socialapp:remote-refresh', remoteRefresh);
+      window.clearInterval(timer);
+    };
   }, [id, can]);
   if (loading) return <div className="p-12 text-center text-sm text-slate-500">Abriendo expediente…</div>;
   if (!athlete) return <div className="card p-10 text-center"><h1 className="text-xl font-bold text-pine-900">No encontramos este expediente</h1><Link to="/deportistas" className="btn-secondary mt-6">Volver a deportistas</Link></div>;

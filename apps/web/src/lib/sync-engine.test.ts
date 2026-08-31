@@ -2,12 +2,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AthleteRecord, ScreeningCampaignData } from '@socialapp/shared';
 import { api } from './api';
 import { db } from './db';
-import { synchronize } from './sync-engine';
+import { athleteRecordToInput } from '../features/athletes/athlete-merge';
+import { listSyncIssues, synchronize } from './sync-engine';
 
 vi.mock('./api', () => ({
   api: {
     health: vi.fn(),
     pushMutations: vi.fn(),
+    getAthlete: vi.fn(),
   },
 }));
 
@@ -133,5 +135,43 @@ describe('sync engine', () => {
     expect(vi.mocked(api.pushMutations).mock.calls[1]![0][0]).toMatchObject({ mutationId: secondMutationId, baseVersion: 1, payload: expect.objectContaining({ version: 1 }) });
     expect(await db.athletes.get(athlete.id)).toMatchObject({ firstNames: 'Valentina final', version: 2, syncStatus: 'synced' });
     expect(await db.syncQueue.count()).toBe(0);
+  });
+
+  it('automatically combines concurrent edits to different athlete fields', async () => {
+    const mutationId = crypto.randomUUID();
+    const base = athleteRecordToInput({ ...athlete, version: 1, syncStatus: 'synced' });
+    const localPayload = { ...base, schoolName: 'Colegio Central' };
+    const remote = { ...athlete, municipality: 'Municipio remoto', version: 2, syncStatus: 'synced' as const };
+    await db.athletes.put({ ...athlete, schoolName: 'Colegio Central', version: 1 });
+    await db.syncQueue.put({ mutationId, entityType: 'athlete', entityId: athlete.id, operation: 'update', baseVersion: 1, occurredAt: athlete.updatedAt, payload: localPayload, baseSnapshot: base, status: 'pending', attempts: 0 });
+    vi.mocked(api.getAthlete).mockResolvedValue(remote);
+    vi.mocked(api.pushMutations)
+      .mockResolvedValueOnce({ results: [{ mutationId, status: 'conflict', serverVersion: 2 }], serverTime: '2026-08-31T00:00:01.000Z' })
+      .mockImplementationOnce(async (mutations) => ({ results: [{ mutationId: mutations[0]!.mutationId, status: 'accepted', serverVersion: 3 }], serverTime: '2026-08-31T00:00:02.000Z' }));
+
+    await synchronize();
+
+    expect(api.pushMutations).toHaveBeenCalledTimes(2);
+    expect(vi.mocked(api.pushMutations).mock.calls[1]![0][0]).toMatchObject({
+      baseVersion: 2,
+      payload: expect.objectContaining({ municipality: 'Municipio remoto', schoolName: 'Colegio Central', version: 2 }),
+    });
+    expect(await db.athletes.get(athlete.id)).toMatchObject({ municipality: 'Municipio remoto', schoolName: 'Colegio Central', version: 3, syncStatus: 'synced' });
+  });
+
+  it('keeps an explicit conflict when both people change the same field', async () => {
+    const mutationId = crypto.randomUUID();
+    const base = athleteRecordToInput({ ...athlete, version: 1, syncStatus: 'synced' });
+    const localPayload = { ...base, municipality: 'Municipio local' };
+    const remote = { ...athlete, municipality: 'Municipio remoto', version: 2, syncStatus: 'synced' as const };
+    await db.athletes.put({ ...athlete, municipality: 'Municipio local', version: 1 });
+    await db.syncQueue.put({ mutationId, entityType: 'athlete', entityId: athlete.id, operation: 'update', baseVersion: 1, occurredAt: athlete.updatedAt, payload: localPayload, baseSnapshot: base, status: 'pending', attempts: 0 });
+    vi.mocked(api.getAthlete).mockResolvedValue(remote);
+    vi.mocked(api.pushMutations).mockResolvedValueOnce({ results: [{ mutationId, status: 'conflict', serverVersion: 2 }], serverTime: '2026-08-31T00:00:01.000Z' });
+
+    await synchronize();
+
+    expect(await listSyncIssues()).toEqual([expect.objectContaining({ canKeepLocal: true, message: expect.stringContaining('Municipio') })]);
+    expect(await db.syncQueue.get(mutationId)).toMatchObject({ status: 'conflict' });
   });
 });

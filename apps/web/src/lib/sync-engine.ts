@@ -1,6 +1,8 @@
-import type { SyncMutation } from '@socialapp/shared';
+import type { AthleteInput, AthleteRecord, SyncMutation } from '@socialapp/shared';
+import { athleteFieldLabels, athleteRecordToInput, mergeConcurrentAthleteEdit, type AthleteMergeField } from '../features/athletes/athlete-merge';
 import { api } from './api';
-import { db } from './db';
+import { db, type LocalMutation } from './db';
+import { createId } from './uuid';
 
 export interface SyncSummary {
   synced: number;
@@ -17,10 +19,45 @@ export interface SyncIssue {
   attempts: number;
   message: string;
   recoverable: boolean;
+  canKeepLocal: boolean;
 }
 
 let activeSync: Promise<SyncSummary> | null = null;
 const versionedEntities = new Set(['athlete', 'social-record', 'socioeconomic-assessment', 'alert', 'follow-up', 'genogram', 'ecomap', 'campaign', 'screening-result']);
+
+interface AthleteRebasePlan {
+  remote: AthleteRecord;
+  merged: AthleteInput;
+  localChanges: AthleteMergeField[];
+  conflicts: AthleteMergeField[];
+}
+
+function mergedAthleteRecord(plan: AthleteRebasePlan, local?: AthleteRecord): AthleteRecord {
+  const record: AthleteRecord = {
+    ...plan.remote,
+    ...plan.merged,
+    guardian: plan.merged.guardian ?? plan.remote.guardian,
+    version: plan.remote.version,
+    syncStatus: 'pending',
+  };
+  if (local && plan.localChanges.includes('birthDate')) record.age = local.age;
+  if (local && plan.localChanges.includes('sportsProgramId')) record.sportsProgramName = local.sportsProgramName;
+  if (local && plan.localChanges.includes('sportId')) record.sportName = local.sportName;
+  if (local && plan.localChanges.includes('categoryId')) record.categoryName = local.categoryName;
+  if (local && plan.localChanges.includes('coachId')) record.coachName = local.coachName;
+  return record;
+}
+
+async function prepareAthleteRebase(current: LocalMutation): Promise<AthleteRebasePlan | null> {
+  if (current.entityType !== 'athlete' || !current.baseSnapshot) return null;
+  try {
+    const remote = await api.getAthlete(current.entityId);
+    const result = mergeConcurrentAthleteEdit(current.baseSnapshot as AthleteInput, current.payload as AthleteInput, remote);
+    return { remote, ...result };
+  } catch {
+    return null;
+  }
+}
 
 async function executeSync(includeErrors: boolean): Promise<SyncSummary> {
   if (!navigator.onLine) throw new Error('Sin conexión. Tus cambios siguen guardados en este dispositivo.');
@@ -57,6 +94,14 @@ async function executeSync(includeErrors: boolean): Promise<SyncSummary> {
       payload: item.payload,
     }));
     const response = await api.pushMutations(payload);
+    const athleteRebases = new Map<string, AthleteRebasePlan>();
+    for (const result of response.results) {
+      if (result.status !== 'conflict') continue;
+      const current = batch.find((item) => item.mutationId === result.mutationId);
+      if (!current) continue;
+      const plan = await prepareAthleteRebase(current);
+      if (plan) athleteRebases.set(result.mutationId, plan);
+    }
     await db.transaction('rw', [db.syncQueue, db.athletes, db.socialRecords, db.socioeconomicAssessments, db.alerts, db.followUps, db.observations, db.diagrams, db.campaigns], async () => {
       for (const result of response.results) {
         const current = batch.find((item) => item.mutationId === result.mutationId);
@@ -101,6 +146,26 @@ async function executeSync(includeErrors: boolean): Promise<SyncSummary> {
           }
           await db.syncQueue.delete(result.mutationId);
         } else {
+          const rebase = athleteRebases.get(result.mutationId);
+          if (result.status === 'conflict' && rebase && rebase.conflicts.length === 0) {
+            const local = await db.athletes.get(current.entityId);
+            await db.syncQueue.delete(current.mutationId);
+            await db.syncQueue.put({
+              ...current,
+              mutationId: createId(),
+              baseVersion: rebase.remote.version,
+              occurredAt: new Date().toISOString(),
+              payload: rebase.merged,
+              baseSnapshot: athleteRecordToInput(rebase.remote),
+              status: 'pending',
+              attempts: 0,
+              lastError: undefined,
+              nextAttemptAt: undefined,
+              rejectionKind: undefined,
+            });
+            await db.athletes.put(mergedAthleteRecord(rebase, local));
+            continue;
+          }
           if (current.entityType === 'athlete') await db.athletes.update(current.entityId, { syncStatus: result.status === 'conflict' ? 'conflict' : 'error' });
           if (current.entityType === 'social-record') await db.socialRecords.update(current.entityId, { syncStatus: result.status === 'conflict' ? 'conflict' : 'error' });
           if (current.entityType === 'socioeconomic-assessment') await db.socioeconomicAssessments.update(current.entityId, { syncStatus: result.status === 'conflict' ? 'conflict' : 'error' });
@@ -117,7 +182,9 @@ async function executeSync(includeErrors: boolean): Promise<SyncSummary> {
           await db.syncQueue.update(result.mutationId, {
             status: result.status === 'conflict' ? 'conflict' : 'error',
             attempts: current.attempts + 1,
-            lastError: result.message,
+            lastError: rebase?.conflicts.length
+              ? `Otra persona cambió también: ${rebase.conflicts.map((field) => athleteFieldLabels[field]).join(', ')}. Elige qué versión conservar.`
+              : result.message,
             rejectionKind: 'server',
           });
         }
@@ -196,6 +263,7 @@ export async function listSyncIssues(): Promise<SyncIssue[]> {
     attempts: item.attempts,
     message: item.lastError || (item.status === 'conflict' ? 'Existe una versión más reciente en el servidor.' : 'El servidor no aceptó este cambio.'),
     recoverable: item.status === 'error' && item.rejectionKind !== 'server',
+    canKeepLocal: item.entityType === 'athlete' && item.status === 'conflict' && Boolean(item.baseSnapshot),
   }));
 }
 
@@ -204,6 +272,39 @@ export async function retrySyncIssue(mutationId: string): Promise<void> {
 }
 
 export async function discardSyncIssue(mutationId: string): Promise<void> {
-  await db.syncQueue.delete(mutationId);
+  const mutation = await db.syncQueue.get(mutationId);
+  let remote: AthleteRecord | null = null;
+  if (navigator.onLine && mutation?.entityType === 'athlete') {
+    try { remote = await api.getAthlete(mutation.entityId); } catch { /* Refresh on the next visit. */ }
+  }
+  await db.transaction('rw', db.syncQueue, db.athletes, async () => {
+    await db.syncQueue.delete(mutationId);
+    if (remote) await db.athletes.put({ ...remote, syncStatus: 'synced' });
+  });
   window.dispatchEvent(new Event('socialapp:remote-refresh'));
+}
+
+export async function keepLocalAthleteConflict(mutationId: string): Promise<void> {
+  const current = await db.syncQueue.get(mutationId);
+  if (!current || current.entityType !== 'athlete' || !current.baseSnapshot) throw new Error('Este conflicto ya no está disponible.');
+  const plan = await prepareAthleteRebase(current);
+  if (!plan) throw new Error('No fue posible cargar la versión más reciente del deportista.');
+  const local = await db.athletes.get(current.entityId);
+  await db.transaction('rw', db.syncQueue, db.athletes, async () => {
+    await db.syncQueue.delete(current.mutationId);
+    await db.syncQueue.put({
+      ...current,
+      mutationId: createId(),
+      baseVersion: plan.remote.version,
+      occurredAt: new Date().toISOString(),
+      payload: plan.merged,
+      baseSnapshot: athleteRecordToInput(plan.remote),
+      status: 'pending',
+      attempts: 0,
+      lastError: undefined,
+      nextAttemptAt: undefined,
+      rejectionKind: undefined,
+    });
+    await db.athletes.put(mergedAthleteRecord(plan, local));
+  });
 }
