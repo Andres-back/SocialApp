@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ScreeningCampaignData, ScreeningCampaignInput, ScreeningInstrumentData, SocioeconomicAssessmentInput } from '@socialapp/shared';
 import { api } from '../../lib/api';
 import { db } from '../../lib/db';
-import { loadCampaigns, saveAssessmentOffline, saveCampaignOffline, saveFollowUpOffline, saveScreeningProgressOffline } from './work-repository';
+import { loadCampaigns, loadInstruments, saveAssessmentOffline, saveCampaignOffline, saveFollowUpOffline, saveScreeningProgressOffline } from './work-repository';
 
 describe('offline social work repository', () => {
   beforeEach(async () => {
@@ -80,5 +80,17 @@ describe('offline social work repository', () => {
 
     expect(await loadCampaigns()).toEqual([]);
     expect(await db.campaigns.get(campaign.id)).toBeUndefined();
+  });
+
+  it('replaces stale questionnaires when another user changes the server catalog', async () => {
+    const stale: ScreeningInstrumentData = { id: crypto.randomUUID(), name: 'Versión retirada', version: 1, active: true, questions: [] };
+    const current: ScreeningInstrumentData = { id: crypto.randomUUID(), name: 'Versión actual', version: 2, active: true, questions: [] };
+    await db.instruments.put(stale);
+    Object.defineProperty(navigator, 'onLine', { configurable: true, value: true });
+    vi.spyOn(api, 'listInstruments').mockResolvedValue([current]);
+
+    expect(await loadInstruments()).toEqual([current]);
+    expect(await db.instruments.get(stale.id)).toBeUndefined();
+    expect(await db.instruments.get(current.id)).toEqual(current);
   });
 });

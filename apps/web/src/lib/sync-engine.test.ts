@@ -113,4 +113,25 @@ describe('sync engine', () => {
 
     expect(await db.syncQueue.count()).toBe(0);
   });
+
+  it('sends consecutive edits of the same athlete in order with the updated server version', async () => {
+    const firstMutationId = crypto.randomUUID();
+    const secondMutationId = crypto.randomUUID();
+    await db.athletes.put({ ...athlete, firstNames: 'Valentina final' });
+    await db.syncQueue.bulkPut([
+      { mutationId: firstMutationId, entityType: 'athlete', entityId: athlete.id, operation: 'update', baseVersion: 0, occurredAt: '2026-08-27T00:00:01.000Z', payload: { ...athlete, firstNames: 'Valentina inicial' }, status: 'pending', attempts: 0 },
+      { mutationId: secondMutationId, entityType: 'athlete', entityId: athlete.id, operation: 'update', baseVersion: 0, occurredAt: '2026-08-27T00:00:02.000Z', payload: { ...athlete, firstNames: 'Valentina final' }, status: 'pending', attempts: 0 },
+    ]);
+    vi.mocked(api.pushMutations)
+      .mockResolvedValueOnce({ results: [{ mutationId: firstMutationId, status: 'accepted', serverVersion: 1 }], serverTime: '2026-08-27T00:00:03.000Z' })
+      .mockResolvedValueOnce({ results: [{ mutationId: secondMutationId, status: 'accepted', serverVersion: 2 }], serverTime: '2026-08-27T00:00:04.000Z' });
+
+    await synchronize();
+
+    expect(api.pushMutations).toHaveBeenCalledTimes(2);
+    expect(vi.mocked(api.pushMutations).mock.calls[0]![0]).toHaveLength(1);
+    expect(vi.mocked(api.pushMutations).mock.calls[1]![0][0]).toMatchObject({ mutationId: secondMutationId, baseVersion: 1, payload: expect.objectContaining({ version: 1 }) });
+    expect(await db.athletes.get(athlete.id)).toMatchObject({ firstNames: 'Valentina final', version: 2, syncStatus: 'synced' });
+    expect(await db.syncQueue.count()).toBe(0);
+  });
 });

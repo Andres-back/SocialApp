@@ -1,4 +1,4 @@
-import { ConflictException, Injectable } from '@nestjs/common';
+import { ConflictException, HttpException, Injectable } from '@nestjs/common';
 import type { SyncPushResponse } from '@socialapp/shared';
 import { PrismaService } from '../prisma/prisma.service';
 import type { PushSyncDto } from './dto/push-sync.dto';
@@ -51,9 +51,14 @@ export class SyncService {
         results.push({ mutationId: mutation.mutationId, status: 'accepted' as const, serverVersion });
       } catch (error) {
         const conflict = error instanceof ConflictException;
-        const message = error instanceof Error ? error.message : 'No fue posible procesar el registro.';
-        await this.prisma.syncMutationReceipt.create({ data: { mutationId: mutation.mutationId, userId, entityType: mutation.entityType, entityId: mutation.entityId, operation: mutation.operation, status: conflict ? 'CONFLICT' : 'REJECTED', message } });
-        results.push({ mutationId: mutation.mutationId, status: conflict ? 'conflict' as const : 'rejected' as const, message });
+        const response = error instanceof HttpException ? error.getResponse() : null;
+        const detail = response && typeof response === 'object' ? response as { message?: string | string[]; serverVersion?: number } : null;
+        const message = Array.isArray(detail?.message)
+          ? detail.message.join(' ')
+          : detail?.message || (typeof response === 'string' ? response : error instanceof Error ? error.message : 'No fue posible procesar el registro.');
+        const serverVersion = detail?.serverVersion;
+        await this.prisma.syncMutationReceipt.create({ data: { mutationId: mutation.mutationId, userId, entityType: mutation.entityType, entityId: mutation.entityId, operation: mutation.operation, status: conflict ? 'CONFLICT' : 'REJECTED', message, serverVersion } });
+        results.push({ mutationId: mutation.mutationId, status: conflict ? 'conflict' as const : 'rejected' as const, message, serverVersion });
       }
     }
     return { results, serverTime: new Date().toISOString() };

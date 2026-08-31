@@ -5,7 +5,7 @@ import type { AthleteRecord, ScreeningInstrumentData, ScreeningInstrumentInput, 
 import { loadAthletes } from '../features/athletes/athlete-repository';
 import { screeningInstrumentPath, SYSTEM_INSTRUMENTS, systemInstrumentPath, type SystemInstrumentKind } from '../features/instruments/instrument-catalog';
 import { useAuth } from '../features/auth/useAuth';
-import { loadInstruments } from '../features/work/work-repository';
+import { loadManageableInstruments } from '../features/work/work-repository';
 import { api } from '../lib/api';
 import { createId } from '../lib/uuid';
 
@@ -48,11 +48,23 @@ export function InstrumentsPage() {
   const [error, setError] = useState('');
 
   const load = useCallback(async () => {
-    const [forms, people] = await Promise.all([api.manageableInstruments().catch(() => loadInstruments()), loadAthletes()]);
+    const [forms, people] = await Promise.all([loadManageableInstruments(), loadAthletes()]);
     setItems(forms); setAthletes(people);
     if (requestedAthleteId && people.some((person) => person.id === requestedAthleteId)) setSelectedAthleteId(requestedAthleteId);
   }, [requestedAthleteId]);
-  useEffect(() => { void load().catch((reason) => setError(reason instanceof Error ? reason.message : 'No fue posible cargar los instrumentos.')); }, [load]);
+  useEffect(() => {
+    const refresh = () => void load().catch((reason) => setError(reason instanceof Error ? reason.message : 'No fue posible cargar los instrumentos.'));
+    const refreshVisible = () => { if (document.visibilityState === 'visible') refresh(); };
+    refresh();
+    const timer = window.setInterval(refreshVisible, 15_000);
+    window.addEventListener('focus', refresh);
+    document.addEventListener('visibilitychange', refreshVisible);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener('focus', refresh);
+      document.removeEventListener('visibilitychange', refreshVisible);
+    };
+  }, [load]);
   const visibleAthletes = useMemo(() => {
     const term = athleteSearch.trim().toLocaleLowerCase('es');
     return athletes.filter((person) => !term || `${person.firstNames} ${person.lastNames} ${person.internalCode}`.toLocaleLowerCase('es').includes(term));
@@ -106,6 +118,16 @@ export function InstrumentsPage() {
   async function toggle(item: ScreeningInstrumentData) {
     setError(''); await api.updateInstrumentStatus(item.id, !item.active); await load();
   }
+  async function remove(item: ScreeningInstrumentData) {
+    if (!window.confirm(`¿Eliminar el cuestionario “${item.name}” y todas sus versiones? Dejará de aparecer para nuevas aplicaciones, pero los resultados históricos se conservarán.`)) return;
+    setSaving(true); setError(''); setMessage('');
+    try {
+      await api.deleteInstrument(item.id);
+      setMessage(`Cuestionario “${item.name}” eliminado. Los resultados anteriores permanecen en sus expedientes.`);
+      await load();
+    } catch (reason) { setError(reason instanceof Error ? reason.message : 'No fue posible eliminar el cuestionario.'); }
+    finally { setSaving(false); }
+  }
 
   return <div>
     <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between"><div><p className="text-sm font-bold text-coral-600">Centro de aplicación</p><h1 className="font-display text-4xl text-pine-900">Instrumentos</h1><p className="mt-2 max-w-3xl text-sm text-slate-500">Todos los formularios de Trabajo Social se aplican desde aquí. El registro de deportistas permanece separado para agilizar el ingreso de la población.</p></div><button className="btn-primary shrink-0" onClick={beginCreate}><Plus size={18}/> Nuevo cuestionario</button></div>
@@ -129,6 +151,6 @@ export function InstrumentsPage() {
       </article>)}</div>
       <button className="btn-primary mt-6 w-full" disabled={saving} onClick={() => void save()}><Save size={18}/> {saving ? 'Guardando…' : editing ? 'Crear nueva versión' : 'Guardar instrumento'}</button>
     </section>}
-    <div className="mt-6 grid gap-4 lg:grid-cols-2">{items.map((item) => <article key={item.id} className={`card p-5 ${item.active ? '' : 'opacity-70'}`}><div className="flex items-start justify-between gap-3"><div className="flex gap-3"><div className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-pine-50 text-pine-700"><BookOpenCheck size={21}/></div><div><h2 className="font-semibold text-pine-900">{item.name} v{item.version}</h2><p className="mt-1 text-xs text-slate-500">{item.ageGroup || 'Sin rango de edad'} · {item.questions.length} {item.questions.length === 1 ? 'pregunta' : 'preguntas'} · {item.active ? 'Disponible' : 'Retirado'}</p></div></div><span className={`rounded-full px-3 py-1 text-xs font-bold ${item.active ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>{item.active ? 'Activo' : 'Histórico'}</span></div><div className="mt-5 flex flex-wrap gap-2">{item.active && <button className="btn-primary min-h-10 px-3 py-2" onClick={() => applyScreening(item.id)}>Aplicar <ArrowRight size={16}/></button>}<button className="btn-secondary min-h-10 px-3 py-2" onClick={() => beginEdit(item)}><Edit3 size={16}/> Editar</button><button className="btn-secondary min-h-10 px-3 py-2" onClick={() => void toggle(item)}><RotateCcw size={16}/> {item.active ? 'Retirar' : 'Reactivar'}</button></div></article>)}</div>
+    <div className="mt-6 grid gap-4 lg:grid-cols-2">{items.map((item) => <article key={item.id} className={`card p-5 ${item.active ? '' : 'opacity-70'}`}><div className="flex items-start justify-between gap-3"><div className="flex gap-3"><div className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-pine-50 text-pine-700"><BookOpenCheck size={21}/></div><div><h2 className="font-semibold text-pine-900">{item.name} v{item.version}</h2><p className="mt-1 text-xs text-slate-500">{item.ageGroup || 'Sin rango de edad'} · {item.questions.length} {item.questions.length === 1 ? 'pregunta' : 'preguntas'} · {item.active ? 'Disponible' : 'Retirado'}</p></div></div><span className={`rounded-full px-3 py-1 text-xs font-bold ${item.active ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>{item.active ? 'Activo' : 'Histórico'}</span></div><div className="mt-5 flex flex-wrap gap-2">{item.active && <button className="btn-primary min-h-10 px-3 py-2" onClick={() => applyScreening(item.id)}>Aplicar <ArrowRight size={16}/></button>}<button className="btn-secondary min-h-10 px-3 py-2" onClick={() => beginEdit(item)}><Edit3 size={16}/> Editar</button><button className="btn-secondary min-h-10 px-3 py-2" onClick={() => void toggle(item)}><RotateCcw size={16}/> {item.active ? 'Retirar' : 'Reactivar'}</button><button className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-red-200 px-3 py-2 text-sm font-bold text-red-700 hover:bg-red-50" disabled={saving} onClick={() => void remove(item)}><Trash2 size={16}/> Eliminar</button></div></article>)}</div>
   </div>;
 }

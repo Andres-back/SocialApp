@@ -37,6 +37,26 @@ describe('athlete offline repository', () => {
     expect(await db.syncQueue.where('entityType').equals('athlete').count()).toBe(1);
   });
 
+  it('updates every editable athlete section and queues it as an update', async () => {
+    await saveAthleteOffline(athlete, catalogs);
+    await db.syncQueue.clear();
+    await db.athletes.update(athlete.id, { version: 1, syncStatus: 'synced' });
+    const edited: AthleteInput = {
+      ...athlete,
+      firstNames: 'Ana María',
+      municipality: 'Nuevo municipio',
+      schoolName: 'Institución actualizada',
+      guardian: { ...athlete.guardian!, phone: '3111111111' },
+      version: 1,
+    };
+
+    const saved = await saveAthleteOffline(edited, catalogs);
+    const mutation = await db.syncQueue.where('entityType').equals('athlete').first();
+
+    expect(saved).toMatchObject({ firstNames: 'Ana María', municipality: 'Nuevo municipio', schoolName: 'Institución actualizada', guardian: { phone: '3111111111' } });
+    expect(mutation).toMatchObject({ operation: 'update', baseVersion: 1, payload: expect.objectContaining({ firstNames: 'Ana María' }) });
+  });
+
   it('links a completed social record to the local population control', async () => {
     await saveAthleteOffline(athlete, catalogs);
     const social: SocialRecordInput = {

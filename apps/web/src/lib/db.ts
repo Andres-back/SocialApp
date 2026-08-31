@@ -6,6 +6,7 @@ export interface LocalMutation extends SyncMutation {
   attempts: number;
   lastError?: string;
   nextAttemptAt?: string;
+  rejectionKind?: 'server' | 'transport';
 }
 
 export interface DraftRecord {

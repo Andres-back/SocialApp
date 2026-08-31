@@ -201,6 +201,23 @@ export class ManagementService {
     await this.audit.record({ actorUserId: userId, action: active ? 'instrument.activate' : 'instrument.retire', resourceType: 'ScreeningInstrument', resourceId: id });
     return saved;
   }
+  async deleteInstrument(userId: string, id: string) {
+    const item = await this.prisma.screeningInstrument.findFirst({ where: { id, deletedAt: null } });
+    if (!item) throw new BadRequestException('El cuestionario ya no está disponible.');
+    const deletedAt = new Date();
+    const result = await this.prisma.screeningInstrument.updateMany({
+      where: { name: item.name, deletedAt: null },
+      data: { active: false, deletedAt, updatedBy: userId },
+    });
+    await this.audit.record({
+      actorUserId: userId,
+      action: 'instrument.delete',
+      resourceType: 'ScreeningInstrument',
+      resourceId: id,
+      metadata: { mode: 'soft-delete', name: item.name, deletedVersions: result.count },
+    });
+    return { success: true, deletedVersions: result.count };
+  }
   async createUser(userId: string, body: { email: string; displayName: string; password: string; roles: string[] }) {
     if (!body.email || !body.displayName || body.password.length < 10 || body.roles.length === 0) throw new BadRequestException('Completa los datos. La contraseña debe tener al menos 10 caracteres.');
     const passwordHash = await argon2.hash(body.password, { type: argon2.argon2id });

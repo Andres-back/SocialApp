@@ -102,8 +102,28 @@ export async function loadCampaigns(): Promise<ScreeningCampaignData[]> {
   return db.campaigns.orderBy('date').reverse().toArray();
 }
 export async function loadInstruments(): Promise<ScreeningInstrumentData[]> {
-  if (navigator.onLine) try { const data = await api.listInstruments(); await db.instruments.bulkPut(data); return data; } catch { /* offline */ }
+  if (navigator.onLine) try {
+    const data = await api.listInstruments();
+    await replaceInstrumentReplica(data);
+    return data;
+  } catch { /* offline */ }
   return db.instruments.toArray();
+}
+export async function loadManageableInstruments(): Promise<ScreeningInstrumentData[]> {
+  if (navigator.onLine) try {
+    const data = await api.manageableInstruments();
+    await replaceInstrumentReplica(data);
+    return data;
+  } catch { /* offline */ }
+  return db.instruments.toArray();
+}
+async function replaceInstrumentReplica(data: ScreeningInstrumentData[]): Promise<void> {
+  const remoteIds = new Set(data.map((item) => item.id));
+  const staleIds = (await db.instruments.toArray()).filter((item) => !remoteIds.has(item.id)).map((item) => item.id);
+  await db.transaction('rw', db.instruments, async () => {
+    await db.instruments.bulkPut(data);
+    await db.instruments.bulkDelete(staleIds);
+  });
 }
 export async function saveCampaignOffline(input: ScreeningCampaignInput, instrument: ScreeningInstrumentData, athleteNames: Record<string, string>, labels?: { sportsProgramName?: string | null; sportName?: string | null }) {
   const existing = await db.campaigns.get(input.id); const now = new Date().toISOString();

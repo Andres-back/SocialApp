@@ -54,6 +54,21 @@ export function CampaignFormPage() {
     });
   }, [id, requestedAthleteId, requestedInstrumentId]);
 
+  useEffect(() => {
+    const refreshInstruments = () => {
+      if (!navigator.onLine || document.visibilityState !== 'visible') return;
+      void loadInstruments().then(setInstruments).catch(() => undefined);
+    };
+    const timer = window.setInterval(refreshInstruments, 15_000);
+    window.addEventListener('focus', refreshInstruments);
+    window.addEventListener('socialapp:remote-refresh', refreshInstruments);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener('focus', refreshInstruments);
+      window.removeEventListener('socialapp:remote-refresh', refreshInstruments);
+    };
+  }, []);
+
   const filtered = useMemo(() => {
     const term = search.trim().toLocaleLowerCase('es');
     return athletes.filter((item) => (!values.programId || item.sportsProgramId === values.programId) && (!values.sportId || item.sportId === values.sportId) && (!term || `${item.firstNames} ${item.lastNames} ${item.internalCode}`.toLocaleLowerCase('es').includes(term)));

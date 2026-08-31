@@ -17,7 +17,30 @@ export function setAccessToken(token: string | null) {
   else sessionStorage.removeItem('socialapp.accessToken');
 }
 
-async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
+async function refreshSession(): Promise<AuthSession | null> {
+  if (!activeRefresh) {
+    activeRefresh = (async () => {
+      const response = await fetch(`${API_URL}/auth/refresh`, {
+        method: 'POST',
+        credentials: 'include',
+      });
+      if (response.status === 204) {
+        setAccessToken(null);
+        return null;
+      }
+      if (!response.ok) {
+        const body = (await response.json().catch(() => null)) as { message?: string } | null;
+        throw new ApiRequestError(body?.message ?? 'No fue posible renovar la sesión.', response.status);
+      }
+      const session = await response.json() as AuthSession;
+      setAccessToken(session.accessToken);
+      return session;
+    })().finally(() => { activeRefresh = null; });
+  }
+  return activeRefresh;
+}
+
+async function request<T>(path: string, init: RequestInit = {}, retryAfterRefresh = true): Promise<T> {
   const headers = new Headers(init.headers);
   if (init.body) headers.set('Content-Type', 'application/json');
   if (accessToken) headers.set('Authorization', `Bearer ${accessToken}`);
@@ -27,6 +50,10 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
     headers,
     credentials: 'include',
   });
+  if (response.status === 401 && retryAfterRefresh && path !== '/auth/refresh') {
+    const session = await refreshSession().catch(() => null);
+    if (session) return request<T>(path, init, false);
+  }
   if (!response.ok) {
     const body = (await response.json().catch(() => null)) as { message?: string } | null;
     throw new ApiRequestError(body?.message ?? 'No fue posible completar la solicitud.', response.status);
@@ -43,11 +70,7 @@ export const api = {
     });
   },
   refresh() {
-    if (!activeRefresh) {
-      activeRefresh = request<AuthSession | null>('/auth/refresh', { method: 'POST' })
-        .finally(() => { activeRefresh = null; });
-    }
-    return activeRefresh;
+    return refreshSession();
   },
   logout() {
     return request<{ success: boolean }>('/auth/logout', { method: 'POST' });
@@ -114,6 +137,7 @@ export const api = {
   manageableInstruments() { return request<ScreeningInstrumentData[]>('/instruments/manage'); },
   saveOperationalInstrument(input: ScreeningInstrumentInput) { return request<ScreeningInstrumentData>('/instruments', { method: 'POST', body: JSON.stringify(input) }); },
   updateInstrumentStatus(id: string, active: boolean) { return request<ScreeningInstrumentData>(`/instruments/${id}`, { method: 'PATCH', body: JSON.stringify({ active }) }); },
+  deleteInstrument(id: string) { return request<{ success: boolean; deletedVersions: number }>(`/instruments/${id}`, { method: 'DELETE' }); },
   listCampaigns() { return request<ScreeningCampaignData[]>('/campaigns'); },
   getCampaign(id: string) { return request<ScreeningCampaignData>(`/campaigns/${id}`); },
   saveCampaign(input: ScreeningCampaignInput) { return request<ScreeningCampaignData>('/campaigns', { method: 'POST', body: JSON.stringify(input) }); },

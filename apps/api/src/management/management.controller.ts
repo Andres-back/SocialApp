@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post, Query, Req, Res } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Req, Res } from '@nestjs/common';
 import { PERMISSIONS } from '@socialapp/shared';
 import type { Request, Response } from 'express';
 import type { RequestUser } from '../iam/authenticated-user';
@@ -89,6 +89,12 @@ export class ManagementController {
   @RequirePermissions(PERMISSIONS.SCREENING_WRITE)
   updateInstrumentStatus(@Param('id') id: string, @Body() body: { active: boolean }, @Req() request: Request & { user: RequestUser }) {
     return this.management.updateInstrumentStatus(request.user.id, id, body.active);
+  }
+
+  @Delete('instruments/:id')
+  @RequirePermissions(PERMISSIONS.SCREENING_WRITE)
+  deleteInstrument(@Param('id') id: string, @Req() request: Request & { user: RequestUser }) {
+    return this.management.deleteInstrument(request.user.id, id);
   }
 
   @Post('admin/users')

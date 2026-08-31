@@ -172,7 +172,7 @@ export function AthleteFormPage() {
           <label><span className="text-sm font-semibold text-slate-700">Teléfono</span><input type="tel" className={inputClass} {...register('guardianPhone')} /><FieldError message={errors.guardianPhone?.message} /></label>
           <label><span className="text-sm font-semibold text-slate-700">Correo</span><input type="email" className={inputClass} {...register('guardianEmail')} /><FieldError message={errors.guardianEmail?.message} /></label>
         </FormSection>
-        <div className="sticky bottom-4 z-20 flex justify-end rounded-2xl border border-white bg-white/90 p-4 shadow-soft backdrop-blur"><button className="btn-primary w-full sm:w-auto" disabled={isSubmitting || !catalogs}><Save size={18} /> {isSubmitting ? 'Guardando…' : 'Guardar deportista'}</button></div>
+        <div className="sticky bottom-4 z-20 flex justify-end rounded-2xl border border-white bg-white/90 p-4 shadow-soft backdrop-blur"><button className="btn-primary w-full sm:w-auto" disabled={isSubmitting || !catalogs}><Save size={18} /> {isSubmitting ? 'Guardando…' : id ? 'Guardar cambios' : 'Guardar deportista'}</button></div>
       </form>
     </div>
   );
