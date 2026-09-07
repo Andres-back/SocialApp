@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { ArrowLeft, Save, WifiOff } from 'lucide-react';
+import { ArrowLeft, Printer, Save, WifiOff } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { z } from 'zod';
@@ -163,7 +163,7 @@ export function AthleteFormPage() {
   return (
     <div className="mx-auto max-w-5xl">
       <Link to={id ? `/deportistas/${id}` : '/deportistas'} className="inline-flex items-center gap-2 text-sm font-semibold text-pine-700"><ArrowLeft size={17} /> Volver</Link>
-      <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between"><div><p className="text-sm font-semibold text-coral-600">Expediente único</p><h1 className="mt-1 font-display text-4xl text-pine-900">{id ? 'Editar deportista' : 'Nuevo deportista'}</h1><p className="mt-2 text-sm text-slate-500">Solo nombres y fecha de nacimiento son obligatorios. Puedes completar el resto después.</p></div>{!online && <span className="inline-flex items-center gap-2 rounded-full bg-amber-50 px-4 py-2 text-xs font-semibold text-amber-800"><WifiOff size={15} /> Guardado sin conexión</span>}</div>
+      <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between"><div><p className="text-sm font-semibold text-coral-600">Expediente único</p><h1 className="mt-1 font-display text-4xl text-pine-900">{id ? 'Editar deportista' : 'Nuevo deportista'}</h1><p className="mt-2 text-sm text-slate-500">Solo nombres y fecha de nacimiento son obligatorios. Puedes completar el resto después.</p></div><div className="flex flex-wrap items-center gap-2"><Link to={id ? '/deportistas/imprimir/registro?athleteId=' + encodeURIComponent(id) : '/deportistas/imprimir/registro'} className="btn-secondary"><Printer size={17}/> {id ? 'Imprimir ficha guardada' : 'Imprimir formato en blanco'}</Link>{!online && <span className="inline-flex items-center gap-2 rounded-full bg-amber-50 px-4 py-2 text-xs font-semibold text-amber-800"><WifiOff size={15} /> Guardado sin conexión</span>}</div></div>
       {loadError && <p role="alert" className="mt-5 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">{loadError}</p>}
       {collaborationNotice && <p role="status" className="mt-5 rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm leading-6 text-sky-800">{collaborationNotice}</p>}
       <form className="mt-7 space-y-6" onSubmit={handleSubmit(submit)}>

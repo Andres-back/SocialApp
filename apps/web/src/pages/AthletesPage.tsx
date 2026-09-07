@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ArrowRight, ClipboardList, Edit3, Plus, Search, Trash2, UserRound, WifiOff } from 'lucide-react';
+import { ArrowRight, ClipboardList, Edit3, Plus, Printer, Search, Trash2, UserRound, WifiOff } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
 import { PERMISSIONS, type AthleteRecord } from '@socialapp/shared';
 import { deleteAthleteOnline, loadAthletes } from '../features/athletes/athlete-repository';
@@ -63,7 +63,7 @@ export function AthletesPage({ socialWorkView = false }: { socialWorkView?: bool
             {socialWorkView ? 'Identifica quién ya tiene ficha y continúa los registros pendientes.' : canManageAthletes ? 'Registra, busca y consulta la población vinculada a los programas deportivos.' : 'Consulta la población deportiva asignada a tu perfil.'}
           </p>
         </div>
-        {canManageAthletes && <Link to="/deportistas/nuevo" className="btn-primary"><Plus size={19} /> Nuevo deportista</Link>}
+        <div className="flex flex-wrap gap-2"><Link to="/deportistas/imprimir/registro" className="btn-secondary"><Printer size={18}/> Imprimir formato en blanco</Link>{canManageAthletes && <Link to="/deportistas/nuevo" className="btn-primary"><Plus size={19} /> Nuevo deportista</Link>}</div>
       </div>
 
       {!online && <div className="mt-6 flex items-center gap-3 rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-800"><WifiOff size={19} /> Mostrando los deportistas guardados en este dispositivo.</div>}
@@ -102,7 +102,7 @@ export function AthletesPage({ socialWorkView = false }: { socialWorkView?: bool
                 </div>}
                 <div className="flex items-center justify-between md:justify-end"><span className="text-xs text-slate-400 md:hidden">{statusLabels[athlete.status]}</span><ArrowRight className="text-slate-300 transition group-hover:translate-x-1 group-hover:text-coral-500" size={20} /></div>
               </Link>
-              {canManageAthletes && <div className="flex gap-2"><Link aria-label={`Editar ${athlete.firstNames}`} title="Editar" to={`/deportistas/${athlete.id}/editar`} className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-slate-200 px-3 text-sm font-bold text-pine-700 hover:bg-white"><Edit3 size={16}/><span className="hidden xl:inline">Editar</span></Link><button type="button" aria-label={`Eliminar ${athlete.firstNames}`} title="Eliminar" disabled={deletingId===athlete.id} onClick={()=>void removeAthlete(athlete)} className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-red-200 px-3 text-sm font-bold text-red-700 hover:bg-red-50"><Trash2 size={16}/><span className="hidden xl:inline">{deletingId===athlete.id?'Eliminando…':'Eliminar'}</span></button></div>}
+              <div className="flex gap-2"><Link aria-label={'Imprimir registro de ' + athlete.firstNames} title="Imprimir registro" to={'/deportistas/imprimir/registro?athleteId=' + encodeURIComponent(athlete.id)} className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-slate-200 px-3 text-sm font-bold text-pine-700 hover:bg-white"><Printer size={16}/><span className="hidden xl:inline">Imprimir</span></Link>{canManageAthletes && <><Link aria-label={`Editar ${athlete.firstNames}`} title="Editar" to={`/deportistas/${athlete.id}/editar`} className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-slate-200 px-3 text-sm font-bold text-pine-700 hover:bg-white"><Edit3 size={16}/><span className="hidden xl:inline">Editar</span></Link><button type="button" aria-label={`Eliminar ${athlete.firstNames}`} title="Eliminar" disabled={deletingId===athlete.id} onClick={()=>void removeAthlete(athlete)} className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-red-200 px-3 text-sm font-bold text-red-700 hover:bg-red-50"><Trash2 size={16}/><span className="hidden xl:inline">{deletingId===athlete.id?'Eliminando…':'Eliminar'}</span></button></>}</div>
               </article>
             ))}
           </div>

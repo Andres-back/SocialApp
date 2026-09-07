@@ -11,6 +11,7 @@ const SyncPage = lazy(() => import('../pages/SyncPage').then((module) => ({ defa
 const AthletesPage = lazy(() => import('../pages/AthletesPage').then((module) => ({ default: module.AthletesPage })));
 const AthleteFormPage = lazy(() => import('../pages/AthleteFormPage').then((module) => ({ default: module.AthleteFormPage })));
 const AthleteDetailPage = lazy(() => import('../pages/AthleteDetailPage').then((module) => ({ default: module.AthleteDetailPage })));
+const AthletePrintPage = lazy(() => import('../pages/AthletePrintPage').then((module) => ({ default: module.AthletePrintPage })));
 const SocialRecordFormPage = lazy(() => import('../pages/SocialRecordFormPage').then((module) => ({ default: module.SocialRecordFormPage })));
 const SocioeconomicAssessmentPage = lazy(() => import('../pages/SocioeconomicAssessmentPage').then((module) => ({ default: module.SocioeconomicAssessmentPage })));
 const WorkOverviewPage = lazy(() => import('../pages/WorkOverviewPage').then((module) => ({ default: module.WorkOverviewPage })));
@@ -39,6 +40,7 @@ function ProtectedApp() {
         <Route path="/sincronizacion" element={<Gate can={can} permission={PERMISSIONS.SYNC_EXECUTE}><SyncPage /></Gate>} />
         <Route path="/deportistas" element={<Gate can={can} permission={PERMISSIONS.ATHLETE_READ}><AthletesPage /></Gate>} />
         <Route path="/deportistas/nuevo" element={<Gate can={can} permission={PERMISSIONS.ATHLETE_WRITE}><AthleteFormPage /></Gate>} />
+        <Route path="/deportistas/imprimir/registro" element={<Gate can={can} permission={PERMISSIONS.ATHLETE_READ}><AthletePrintPage /></Gate>} />
         <Route path="/deportistas/:id/editar" element={<Gate can={can} permission={PERMISSIONS.ATHLETE_WRITE}><AthleteFormPage /></Gate>} />
         <Route path="/deportistas/:id" element={<Gate can={can} permission={PERMISSIONS.ATHLETE_READ}><AthleteDetailPage /></Gate>} />
         <Route path="/deportistas/:id/ficha-social" element={<Gate can={can} permission={PERMISSIONS.SOCIAL_RECORD_WRITE}><SocialRecordFormPage /></Gate>} />
