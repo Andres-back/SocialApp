@@ -61,6 +61,11 @@ async function prepareAthleteRebase(current: LocalMutation): Promise<AthleteReba
 
 async function executeSync(includeErrors: boolean): Promise<SyncSummary> {
   if (!navigator.onLine) throw new Error('Sin conexión. Tus cambios siguen guardados en este dispositivo.');
+  const owner = await db.metadata.get('replica.owner');
+  const profile = sessionStorage.getItem('socialapp.sessionUser');
+  if (owner && (!profile || (JSON.parse(profile) as { id: string }).id !== owner.value)) {
+    throw new Error('Entra con la cuenta propietaria de estos cambios para sincronizarlos. Los datos siguen guardados.');
+  }
 
   await api.health();
   await db.syncQueue.where('status').equals('processing').modify({ status: 'pending' });

@@ -1,8 +1,9 @@
 import { useState } from 'react';
-import { Eye, EyeOff, LockKeyhole, WifiOff } from 'lucide-react';
+import { Eye, EyeOff, LockKeyhole, ShieldCheck, WifiOff } from 'lucide-react';
 import { z } from 'zod';
 import { useAuth } from '../features/auth/useAuth';
 import { useConnection } from '../hooks/useConnection';
+import { ReplicaSwitchRequiredError } from '../features/auth/replica-session';
 
 const credentialsSchema = z.object({ email: z.string().email('Escribe un correo válido.'), password: z.string().min(8, 'La contraseña debe tener al menos 8 caracteres.') });
 
@@ -14,16 +15,25 @@ export function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [switchRequest, setSwitchRequest] = useState<ReplicaSwitchRequiredError | null>(null);
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
+    await submit();
+  }
+
+  async function submit(confirmSwitch = false) {
     setError('');
+    setSwitchRequest(null);
     const parsed = credentialsSchema.safeParse({ email, password });
     if (!parsed.success) return setError(parsed.error.issues[0]?.message ?? 'Revisa los datos.');
     if (!online) return setError('Necesitas conexión para iniciar sesión por primera vez.');
     setSubmitting(true);
-    try { await login(email, password); }
-    catch (reason) { setError(reason instanceof Error ? reason.message : 'No fue posible iniciar sesión.'); }
+    try { await login(email, password, confirmSwitch); }
+    catch (reason) {
+      if (reason instanceof ReplicaSwitchRequiredError) setSwitchRequest(reason);
+      else setError(reason instanceof Error ? reason.message : 'No fue posible iniciar sesión.');
+    }
     finally { setSubmitting(false); }
   }
 
@@ -50,9 +60,17 @@ export function LoginPage() {
           {!online && <div className="mt-5 flex gap-3 rounded-xl bg-amber-50 p-4 text-sm text-amber-800"><WifiOff className="shrink-0" size={20} /><span>Sin conexión. Si ya tenías una sesión abierta, puedes continuar desde ese dispositivo.</span></div>}
 
           <form className="mt-8 space-y-5" onSubmit={handleSubmit}>
-            <label className="block"><span className="mb-2 block text-sm font-semibold text-slate-700">Correo institucional</span><input className="field" type="email" autoComplete="username" value={email} onChange={(event) => setEmail(event.target.value)} /></label>
+            <label className="block"><span className="mb-2 block text-sm font-semibold text-slate-700">Correo institucional</span><input className="field" type="email" autoComplete="username" value={email} onChange={(event) => { setEmail(event.target.value); setSwitchRequest(null); }} /></label>
             <label className="block"><span className="mb-2 block text-sm font-semibold text-slate-700">Contraseña</span><span className="relative block"><input className="field pr-12" type={showPassword ? 'text' : 'password'} autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} /><button type="button" aria-label={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'} className="absolute right-3 top-1/2 -translate-y-1/2 p-2 text-slate-500" onClick={() => setShowPassword((value) => !value)}>{showPassword ? <EyeOff size={20} /> : <Eye size={20} />}</button></span></label>
             {error && <p role="alert" className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>}
+            {switchRequest && <section role="alert" className="rounded-2xl border border-pine-100 bg-pine-50 p-5">
+              <div className="flex items-center gap-2 font-semibold text-pine-900"><ShieldCheck size={20} />Cambio seguro de cuenta</div>
+              <p className="mt-3 text-sm leading-6 text-slate-600">{switchRequest.message}</p>
+              {switchRequest.drafts > 0 && <p className="mt-2 text-sm text-slate-600">{switchRequest.drafts === 1 ? 'Se conserva' : 'Se conservan'} {switchRequest.drafts} borrador{switchRequest.drafts === 1 ? '' : 'es'} de la cuenta anterior. Podrás continuarlos al volver a entrar con esa cuenta.</p>}
+              {switchRequest.pending === 0 && <button type="button" className="btn-primary mt-4 w-full" disabled={submitting} onClick={() => void submit(true)}><ShieldCheck size={18} />Cambiar de cuenta conservando los datos</button>}
+              {switchRequest.previousEmail && <button type="button" className="btn-secondary mt-3 w-full" disabled={submitting} onClick={() => { setEmail(switchRequest.previousEmail!); setPassword(''); setSwitchRequest(null); }}>Volver a la cuenta anterior</button>}
+              {switchRequest.pending > 0 && <p className="mt-3 text-xs leading-5 text-slate-500">No borres los datos del navegador. La sincronización automática se reanuda al entrar con la cuenta anterior y tener conexión.</p>}
+            </section>}
             <button className="btn-primary w-full" disabled={submitting}><LockKeyhole size={19} />{submitting ? 'Verificando…' : 'Ingresar de forma segura'}</button>
           </form>
           <p className="mt-8 text-center text-xs leading-5 text-slate-400">Esta herramienta apoya la organización de Trabajo Social. No realiza diagnósticos clínicos.</p>
@@ -61,4 +79,3 @@ export function LoginPage() {
     </main>
   );
 }
-

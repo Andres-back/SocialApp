@@ -2,7 +2,8 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import type { AuthUser, PermissionCode } from '@socialapp/shared';
 import { api, setAccessToken } from '../../lib/api';
 import { AuthContext } from './auth-context';
-import { db } from '../../lib/db';
+import { db, REPLICA_DATABASE_KEY } from '../../lib/db';
+import { prepareReplicaForUser } from './replica-session';
 
 const PROFILE_KEY = 'socialapp.sessionUser';
 
@@ -16,38 +17,60 @@ function readSessionUser(): AuthUser | null {
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<AuthUser | null>(() => readSessionUser());
-  const [loading, setLoading] = useState(false);
+  const [user, setUser] = useState<AuthUser | null>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!navigator.onLine) return;
-    setLoading(true);
-    api.refresh()
-      .then((session) => {
-        if (!session) return;
+    let active = true;
+    async function restore() {
+      const saved = readSessionUser();
+      if (saved) {
+        await prepareReplicaForUser(saved);
+        if (active) setUser(saved);
+      }
+      if (!navigator.onLine) return;
+      const session = await api.refresh();
+      if (!session) {
+        if (active) setUser(null);
+        sessionStorage.removeItem(PROFILE_KEY);
+        return;
+      }
+      // Shared cookies must not bypass the explicit account switch.
+      await prepareReplicaForUser(session.user);
+      if (active) {
         setAccessToken(session.accessToken);
         setUser(session.user);
         sessionStorage.setItem(PROFILE_KEY, JSON.stringify(session.user));
-      })
-      .catch(() => undefined)
-      .finally(() => setLoading(false));
+      }
+    }
+    void restore().catch(() => {
+      setAccessToken(null);
+    }).finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
   }, []);
 
   const value = useMemo(
     () => ({
       user,
       loading,
-      async login(email: string, password: string) {
+      async login(email: string, password: string, confirmSwitch = false) {
         const session = await api.login(email, password);
-        const owner = await db.metadata.get('replica.owner');
-        if (owner && owner.value !== session.user.id) {
+        let databaseName: string;
+        try {
+          databaseName = await prepareReplicaForUser(session.user, confirmSwitch);
+        } catch (error) {
           await api.logout().catch(() => undefined);
-          throw new Error('Este dispositivo conserva una réplica asignada a otro usuario. Un administrador debe realizar el cambio seguro de usuario después de sincronizar.');
+          setAccessToken(null);
+          throw error;
         }
-        await db.metadata.put({ key: 'replica.owner', value: session.user.id, updatedAt: new Date().toISOString() });
         setAccessToken(session.accessToken);
-        setUser(session.user);
+        sessionStorage.setItem(REPLICA_DATABASE_KEY, databaseName);
         sessionStorage.setItem(PROFILE_KEY, JSON.stringify(session.user));
+        if (databaseName !== db.name) {
+          window.location.replace('/');
+          return;
+        }
+        setUser(session.user);
       },
       async logout() {
         try { if (navigator.onLine) await api.logout(); } finally {

@@ -75,7 +75,8 @@ function Gate({ can, permission, feature, children }: { can: (permission: Permis
 }
 
 export function App() {
-  const { user } = useAuth();
+  const { user, loading } = useAuth();
+  if (loading) return <div role="status" className="grid min-h-screen place-items-center bg-sand-50 text-sm text-pine-800">Preparando tu espacio seguro…</div>;
   return (
     <Routes>
       <Route path="/acceso" element={user ? <Navigate to="/" replace /> : <LoginPage />} />

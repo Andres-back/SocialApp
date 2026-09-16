@@ -80,7 +80,10 @@ export class SocialAppDatabase extends Dexie {
   }
 }
 
-export const db = new SocialAppDatabase();
+export const REPLICA_DATABASE_KEY = 'socialapp.replicaDatabase';
+export const LEGACY_REPLICA_NAME = 'socialapp-local';
+// Switching reloads the app so mounted forms cannot reuse another replica.
+export const db = new SocialAppDatabase(sessionStorage.getItem(REPLICA_DATABASE_KEY) ?? LEGACY_REPLICA_NAME);
 
 export async function enqueueMutation(
   mutation: Omit<LocalMutation, 'status' | 'attempts'>,

@@ -1,4 +1,5 @@
 import type { AiRiskReportData, AlertData, AppFeatureKey, AthleteInput, AthleteRecord, AthleteWorkspace, AuthSession, CampaignAiReportData, DashboardData, FeatureVisibilityData, FollowUpCaseData, FollowUpCaseInput, FollowUpEntryData, FollowUpEntryInput, ManageableSportsCatalogs, NetworkDiagramData, ProfessionalObservationData, ReportPopulationData, ScreeningCampaignData, ScreeningCampaignInput, ScreeningInstrumentData, ScreeningInstrumentInput, SocialRecordData, SocialRecordInput, SocioeconomicAssessmentData, SocioeconomicAssessmentInput, SportsCatalogs, SyncMutation, SyncPushResponse, SystemInstrumentConfigurationData, SystemInstrumentQuestionData } from '@socialapp/shared';
+import { db } from './db';
 
 const API_URL = import.meta.env.VITE_API_URL ?? (import.meta.env.DEV ? 'http://localhost:3000/api/v1' : '/api/v1');
 let accessToken: string | null = sessionStorage.getItem('socialapp.accessToken');
@@ -33,6 +34,12 @@ async function refreshSession(): Promise<AuthSession | null> {
         throw new ApiRequestError(body?.message ?? 'No fue posible renovar la sesión.', response.status);
       }
       const session = await response.json() as AuthSession;
+      const savedProfile = sessionStorage.getItem('socialapp.sessionUser');
+      const owner = await db.metadata.get('replica.owner');
+      if ((savedProfile && (JSON.parse(savedProfile) as { id: string }).id !== session.user.id) || (owner && owner.value !== session.user.id)) {
+        setAccessToken(null);
+        throw new ApiRequestError('Otra pestaña cambió de cuenta. Vuelve a iniciar sesión; tus datos locales se conservan.', 409);
+      }
       setAccessToken(session.accessToken);
       return session;
     })().finally(() => { activeRefresh = null; });
@@ -67,7 +74,7 @@ export const api = {
     return request<AuthSession>('/auth/login', {
       method: 'POST',
       body: JSON.stringify({ email, password }),
-    });
+    }, false);
   },
   refresh() {
     return refreshSession();
@@ -78,7 +85,12 @@ export const api = {
   health() {
     return request<{ status: string }>('/health');
   },
-  pushMutations(mutations: SyncMutation[]) {
+  async pushMutations(mutations: SyncMutation[]) {
+    const owner = await db.metadata.get('replica.owner');
+    const profile = sessionStorage.getItem('socialapp.sessionUser');
+    if (owner && (!profile || (JSON.parse(profile) as { id: string }).id !== owner.value)) {
+      throw new ApiRequestError('No se enviaron los cambios: pertenecen a otra cuenta y siguen guardados.', 409);
+    }
     return request<SyncPushResponse>('/sync/push', {
       method: 'POST',
       body: JSON.stringify({ mutations }),
