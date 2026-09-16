@@ -12,7 +12,11 @@ describe('ManagementService instruments', () => {
 
     expect(result).toEqual({ key: 'campaigns', enabledForSocialWorker: false, updatedAt: '2026-09-15T12:00:00.000Z' });
     expect(prisma.featureVisibility.upsert).toHaveBeenCalledWith(expect.objectContaining({ where: { key: 'campaigns' }, update: expect.objectContaining({ enabledForSocialWorker: false }) }));
-    expect(audit.record).toHaveBeenCalledOnce();
+    expect(audit.record).toHaveBeenCalledWith(expect.objectContaining({
+      action: 'feature-visibility.update',
+      resourceType: 'FeatureVisibility',
+      metadata: { key: 'campaigns', enabledForSocialWorker: false },
+    }));
   });
 
   it('soft deletes every version of a questionnaire while preserving relational history', async () => {

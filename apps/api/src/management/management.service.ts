@@ -27,7 +27,7 @@ export class ManagementService {
       update: { enabledForSocialWorker, updatedBy: userId, version: { increment: 1 } },
       create: { key, enabledForSocialWorker, createdBy: userId, updatedBy: userId },
     });
-    await this.audit.record({ actorUserId: userId, action: 'feature-visibility.update', resourceType: 'FeatureVisibility', resourceId: key, metadata: { enabledForSocialWorker } });
+    await this.audit.record({ actorUserId: userId, action: 'feature-visibility.update', resourceType: 'FeatureVisibility', metadata: { key, enabledForSocialWorker } });
     return { key: key as AppFeatureKey, enabledForSocialWorker: saved.enabledForSocialWorker, updatedAt: saved.updatedAt.toISOString() };
   }
 
