@@ -1,6 +1,6 @@
 import type { AiRiskReportData, AlertData, AppFeatureKey, AthleteInput, AthleteRecord, AthleteWorkspace, AuthSession, CampaignAiReportData, DashboardData, FeatureVisibilityData, FollowUpCaseData, FollowUpCaseInput, FollowUpEntryData, FollowUpEntryInput, ManageableSportsCatalogs, NetworkDiagramData, ProfessionalObservationData, ReportPopulationData, ScreeningCampaignData, ScreeningCampaignInput, ScreeningInstrumentData, ScreeningInstrumentInput, SocialRecordData, SocialRecordInput, SocioeconomicAssessmentData, SocioeconomicAssessmentInput, SportsCatalogs, SyncMutation, SyncPushResponse, SystemInstrumentConfigurationData, SystemInstrumentQuestionData } from '@socialapp/shared';
 
-const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:3000/api/v1';
+const API_URL = import.meta.env.VITE_API_URL ?? (import.meta.env.DEV ? 'http://localhost:3000/api/v1' : '/api/v1');
 let accessToken: string | null = sessionStorage.getItem('socialapp.accessToken');
 let activeRefresh: Promise<AuthSession | null> | null = null;
 
