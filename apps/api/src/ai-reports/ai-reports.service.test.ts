@@ -81,8 +81,8 @@ describe('AiReportsService', () => {
   it('genera el informe de brigada sin enviar respuestas individuales ni textos libres', async () => {
     process.env.GROQ_API_KEY = 'test-key';
     const campaignId = '11111111-1111-1111-1111-111111111111';
-    const participants = Array.from({ length: 5 }, (_, index) => ({
-      responses: { choice: index < 3 ? 'Sí' : 'No', note: 'texto-sensible-' + index, amount: 987650 + index },
+    const participants = Array.from({ length: 1 }, (_, index) => ({
+      responses: { choice: 'Sí', note: 'texto-sensible-' + index, amount: 987650 + index },
       completedAt: new Date(),
     }));
     const campaign = {
@@ -94,10 +94,10 @@ describe('AiReportsService', () => {
       ] },
       participants,
     };
-    const saved = { id: '22222222-2222-2222-2222-222222222222', campaignId, generalResults: 'Tres de cinco respuestas fueron afirmativas.', observations: ['Cobertura completa.'], recommendations: ['Revisar el patrón con el equipo.'], limitations: 'No se analizaron textos libres.', model: 'openai/gpt-oss-20b', generatedAt: new Date(), version: 1 };
+    const saved = { id: '22222222-2222-2222-2222-222222222222', campaignId, generalResults: 'La respuesta disponible fue afirmativa.', observations: ['Cobertura disponible.'], recommendations: ['Revisar el resultado con el equipo.'], limitations: 'Solo hay una encuesta completada y no se analizaron textos libres.', model: 'openai/gpt-oss-20b', generatedAt: new Date(), version: 1 };
     const prisma = {
       screeningCampaign: { findFirst: vi.fn().mockResolvedValue(campaign) },
-      campaignParticipant: { count: vi.fn().mockResolvedValue(5) },
+      campaignParticipant: { count: vi.fn().mockResolvedValue(1) },
       campaignAiReport: { create: vi.fn().mockResolvedValue(saved) },
     };
     const audit = { record: vi.fn().mockResolvedValue(undefined) };
@@ -108,7 +108,7 @@ describe('AiReportsService', () => {
 
     const request = JSON.parse(fetchMock.mock.calls[0]![1]!.body as string) as { messages: Array<{ content: string }> };
     const payload = request.messages[1]!.content;
-    expect(payload).toContain('"option":"Sí","count":3');
+    expect(payload).toContain('"option":"Sí","count":1');
     expect(payload).not.toContain('texto-sensible');
     expect(payload).not.toContain('98765');
     expect(result.generalResults).toBe(saved.generalResults);

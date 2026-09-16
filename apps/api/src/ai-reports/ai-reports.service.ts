@@ -59,7 +59,7 @@ export class AiReportsService {
       },
     });
     if (!campaign) throw new NotFoundException('No encontramos la brigada.');
-    if (campaign.participants.length < 5) throw new BadRequestException('Se necesitan al menos cinco tamizajes completados para generar un informe agregado con IA sin exponer respuestas individuales.');
+    if (campaign.participants.length === 0) throw new BadRequestException('Completa al menos un tamizaje antes de generar el informe de la brigada.');
     const totalAssigned = await this.prisma.campaignParticipant.count({ where: { campaignId, deletedAt: null } });
     const questionSummaries = campaign.instrument.questions.map((question) => {
       const values = campaign.participants.map((participant) => (participant.responses as Prisma.JsonObject)[question.id]).filter((value) => value !== undefined && value !== null && value !== '');
@@ -77,7 +77,7 @@ export class AiReportsService {
       instrument: { name: campaign.instrument.name, version: campaign.instrument.version },
       coverage: { assigned: totalAssigned, completed: campaign.participants.length },
       aggregatedQuestionResults: questionSummaries,
-      privacyNote: 'No incluye nombres, identificadores, datos demográficos ni respuestas individuales. Los textos libres y valores numéricos no se transmiten.',
+      privacyNote: 'No incluye nombres, identificadores ni datos demográficos. Solo transmite conteos por opción; los textos libres y valores numéricos no se transmiten. En grupos pequeños, un conteo puede representar a una sola persona.',
     };
     const sourceJson = JSON.stringify(source);
     const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
