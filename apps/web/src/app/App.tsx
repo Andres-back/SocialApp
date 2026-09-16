@@ -1,9 +1,11 @@
 import { lazy, Suspense } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
-import { PERMISSIONS, type PermissionCode } from '@socialapp/shared';
+import { APP_FEATURES, PERMISSIONS, type AppFeatureKey, type PermissionCode } from '@socialapp/shared';
 import { AppLayout } from '../components/layout/AppLayout';
 import { useAuth } from '../features/auth/useAuth';
 import { LoginPage } from '../pages/LoginPage';
+import { FeatureVisibilityProvider } from '../features/visibility/FeatureVisibilityProvider';
+import { useFeatureVisibility } from '../features/visibility/useFeatureVisibility';
 
 const DashboardPage = lazy(() => import('../pages/DashboardPage').then((module) => ({ default: module.DashboardPage })));
 const NotFoundPage = lazy(() => import('../pages/NotFoundPage').then((module) => ({ default: module.NotFoundPage })));
@@ -34,41 +36,42 @@ function ProtectedApp() {
   if (!user) return <Navigate to="/acceso" replace />;
 
   return (
-    <AppLayout>
+    <FeatureVisibilityProvider><AppLayout>
       <Suspense fallback={<div className="p-12 text-center text-sm text-slate-500">Abriendo módulo…</div>}><Routes>
         <Route path="/" element={<DashboardPage />} />
-        <Route path="/sincronizacion" element={<Gate can={can} permission={PERMISSIONS.SYNC_EXECUTE}><SyncPage /></Gate>} />
-        <Route path="/deportistas" element={<Gate can={can} permission={PERMISSIONS.ATHLETE_READ}><AthletesPage /></Gate>} />
-        <Route path="/deportistas/nuevo" element={<Gate can={can} permission={PERMISSIONS.ATHLETE_WRITE}><AthleteFormPage /></Gate>} />
-        <Route path="/deportistas/imprimir/registro" element={<Gate can={can} permission={PERMISSIONS.ATHLETE_READ}><AthletePrintPage /></Gate>} />
-        <Route path="/deportistas/:id/editar" element={<Gate can={can} permission={PERMISSIONS.ATHLETE_WRITE}><AthleteFormPage /></Gate>} />
-        <Route path="/deportistas/:id" element={<Gate can={can} permission={PERMISSIONS.ATHLETE_READ}><AthleteDetailPage /></Gate>} />
-        <Route path="/deportistas/:id/ficha-social" element={<Gate can={can} permission={PERMISSIONS.SOCIAL_RECORD_WRITE}><SocialRecordFormPage /></Gate>} />
-        <Route path="/deportistas/:id/caracterizacion" element={<Gate can={can} permission={PERMISSIONS.ASSESSMENT_WRITE}><SocioeconomicAssessmentPage /></Gate>} />
-        <Route path="/deportistas/:id/trabajo-social" element={<Gate can={can} permission={PERMISSIONS.FOLLOW_UP_READ}><AthleteWorkPage /></Gate>} />
-        <Route path="/deportistas/:id/familiograma" element={<Gate can={can} permission={PERMISSIONS.DIAGRAM_WRITE}><DiagramPage /></Gate>} />
-        <Route path="/deportistas/:id/ecomapa" element={<Gate can={can} permission={PERMISSIONS.DIAGRAM_WRITE}><DiagramPage /></Gate>} />
-        <Route path="/trabajo-social" element={<Gate can={can} permission={PERMISSIONS.SOCIAL_RECORD_READ}><WorkOverviewPage /></Gate>} />
-        <Route path="/brigadas" element={<Gate can={can} permission={PERMISSIONS.SCREENING_READ}><CampaignsPage /></Gate>} />
-        <Route path="/brigadas/nueva" element={<Gate can={can} permission={PERMISSIONS.SCREENING_WRITE}><CampaignFormPage /></Gate>} />
-        <Route path="/brigadas/:id/editar" element={<Gate can={can} permission={PERMISSIONS.SCREENING_WRITE}><CampaignFormPage /></Gate>} />
-        <Route path="/brigadas/:id" element={<Gate can={can} permission={PERMISSIONS.SCREENING_READ}><CampaignModePage /></Gate>} />
-        <Route path="/brigadas/:id/deportistas/:athleteId" element={<Gate can={can} permission={PERMISSIONS.SCREENING_WRITE}><ScreeningFormPage /></Gate>} />
-        <Route path="/brigadas/:id/resultados/:athleteId" element={<Gate can={can} permission={PERMISSIONS.SCREENING_READ}><ScreeningResultPage /></Gate>} />
-        <Route path="/reportes" element={<Gate can={can} permission={PERMISSIONS.DASHBOARD_AGGREGATE_READ}><ReportsPage /></Gate>} />
-        <Route path="/reportes/deportistas/:id" element={<Gate can={can} permission={PERMISSIONS.SOCIAL_RECORD_READ}><IndividualReportPage /></Gate>} />
-        <Route path="/catalogos" element={<Gate can={can} permission={PERMISSIONS.CATALOG_MANAGE}><CatalogsPage /></Gate>} />
-        <Route path="/instrumentos" element={<Gate can={can} permission={PERMISSIONS.SCREENING_WRITE}><InstrumentsPage /></Gate>} />
-        <Route path="/instrumentos/imprimir/:source/:instrumentId" element={<Gate can={can} permission={PERMISSIONS.SCREENING_READ}><InstrumentPrintPage /></Gate>} />
+        <Route path="/sincronizacion" element={<Gate can={can} permission={PERMISSIONS.SYNC_EXECUTE} feature={APP_FEATURES.SYNC}><SyncPage /></Gate>} />
+        <Route path="/deportistas" element={<Gate can={can} permission={PERMISSIONS.ATHLETE_READ} feature={APP_FEATURES.ATHLETES}><AthletesPage /></Gate>} />
+        <Route path="/deportistas/nuevo" element={<Gate can={can} permission={PERMISSIONS.ATHLETE_WRITE} feature={APP_FEATURES.ATHLETES}><AthleteFormPage /></Gate>} />
+        <Route path="/deportistas/imprimir/registro" element={<Gate can={can} permission={PERMISSIONS.ATHLETE_READ} feature={APP_FEATURES.ATHLETES}><AthletePrintPage /></Gate>} />
+        <Route path="/deportistas/:id/editar" element={<Gate can={can} permission={PERMISSIONS.ATHLETE_WRITE} feature={APP_FEATURES.ATHLETES}><AthleteFormPage /></Gate>} />
+        <Route path="/deportistas/:id" element={<Gate can={can} permission={PERMISSIONS.ATHLETE_READ} feature={APP_FEATURES.ATHLETES}><AthleteDetailPage /></Gate>} />
+        <Route path="/deportistas/:id/ficha-social" element={<Gate can={can} permission={PERMISSIONS.SOCIAL_RECORD_WRITE} feature={APP_FEATURES.SOCIAL_WORK}><SocialRecordFormPage /></Gate>} />
+        <Route path="/deportistas/:id/caracterizacion" element={<Gate can={can} permission={PERMISSIONS.ASSESSMENT_WRITE} feature={APP_FEATURES.SOCIAL_WORK}><SocioeconomicAssessmentPage /></Gate>} />
+        <Route path="/deportistas/:id/trabajo-social" element={<Gate can={can} permission={PERMISSIONS.FOLLOW_UP_READ} feature={APP_FEATURES.SOCIAL_WORK}><AthleteWorkPage /></Gate>} />
+        <Route path="/deportistas/:id/familiograma" element={<Gate can={can} permission={PERMISSIONS.DIAGRAM_WRITE} feature={APP_FEATURES.SOCIAL_WORK}><DiagramPage /></Gate>} />
+        <Route path="/deportistas/:id/ecomapa" element={<Gate can={can} permission={PERMISSIONS.DIAGRAM_WRITE} feature={APP_FEATURES.SOCIAL_WORK}><DiagramPage /></Gate>} />
+        <Route path="/trabajo-social" element={<Gate can={can} permission={PERMISSIONS.SOCIAL_RECORD_READ} feature={APP_FEATURES.SOCIAL_WORK}><WorkOverviewPage /></Gate>} />
+        <Route path="/brigadas" element={<Gate can={can} permission={PERMISSIONS.SCREENING_READ} feature={APP_FEATURES.CAMPAIGNS}><CampaignsPage /></Gate>} />
+        <Route path="/brigadas/nueva" element={<Gate can={can} permission={PERMISSIONS.SCREENING_WRITE} feature={APP_FEATURES.CAMPAIGNS}><CampaignFormPage /></Gate>} />
+        <Route path="/brigadas/:id/editar" element={<Gate can={can} permission={PERMISSIONS.SCREENING_WRITE} feature={APP_FEATURES.CAMPAIGNS}><CampaignFormPage /></Gate>} />
+        <Route path="/brigadas/:id" element={<Gate can={can} permission={PERMISSIONS.SCREENING_READ} feature={APP_FEATURES.CAMPAIGNS}><CampaignModePage /></Gate>} />
+        <Route path="/brigadas/:id/deportistas/:athleteId" element={<Gate can={can} permission={PERMISSIONS.SCREENING_WRITE} feature={APP_FEATURES.CAMPAIGNS}><ScreeningFormPage /></Gate>} />
+        <Route path="/brigadas/:id/resultados/:athleteId" element={<Gate can={can} permission={PERMISSIONS.SCREENING_READ} feature={APP_FEATURES.CAMPAIGNS}><ScreeningResultPage /></Gate>} />
+        <Route path="/reportes" element={<Gate can={can} permission={PERMISSIONS.DASHBOARD_AGGREGATE_READ} feature={APP_FEATURES.REPORTS}><ReportsPage /></Gate>} />
+        <Route path="/reportes/deportistas/:id" element={<Gate can={can} permission={PERMISSIONS.SOCIAL_RECORD_READ} feature={APP_FEATURES.REPORTS}><IndividualReportPage /></Gate>} />
+        <Route path="/catalogos" element={<Gate can={can} permission={PERMISSIONS.CATALOG_MANAGE} feature={APP_FEATURES.CATALOGS}><CatalogsPage /></Gate>} />
+        <Route path="/instrumentos" element={<Gate can={can} permission={PERMISSIONS.SCREENING_WRITE} feature={APP_FEATURES.INSTRUMENTS}><InstrumentsPage /></Gate>} />
+        <Route path="/instrumentos/imprimir/:source/:instrumentId" element={<Gate can={can} permission={PERMISSIONS.SCREENING_READ} feature={APP_FEATURES.INSTRUMENTS}><InstrumentPrintPage /></Gate>} />
         <Route path="/administracion" element={<Gate can={can} permission={PERMISSIONS.ADMIN_USERS}><AdminPage /></Gate>} />
         <Route path="*" element={<NotFoundPage />} />
       </Routes></Suspense>
-    </AppLayout>
+    </AppLayout></FeatureVisibilityProvider>
   );
 }
 
-function Gate({ can, permission, children }: { can: (permission: PermissionCode) => boolean; permission: PermissionCode; children: React.ReactNode }) {
-  return can(permission) ? children : <div className="card p-10 text-center"><h1 className="font-display text-3xl text-pine-900">Acceso restringido</h1><p className="mt-3 text-sm text-slate-500">Tu perfil no tiene permiso para consultar esta información.</p><a href="/" className="btn-secondary mt-6">Volver al inicio</a></div>;
+function Gate({ can, permission, feature, children }: { can: (permission: PermissionCode) => boolean; permission: PermissionCode; feature?: AppFeatureKey; children: React.ReactNode }) {
+  const { isVisible } = useFeatureVisibility();
+  return can(permission) && (!feature || isVisible(feature)) ? children : <div className="card p-10 text-center"><h1 className="font-display text-3xl text-pine-900">Sección no disponible</h1><p className="mt-3 text-sm text-slate-500">Tu perfil no tiene acceso o esta sección fue desactivada por administración.</p><a href="/" className="btn-secondary mt-6">Volver al inicio</a></div>;
 }
 
 export function App() {

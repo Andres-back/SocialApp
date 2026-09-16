@@ -1,6 +1,6 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import type { AdminUserData, AuditLogData, ConfigurableRuleData, DashboardData, ManageableCatalogItem, ManageableSportsCatalogs, ReportPopulationData, RoleCode, ScreeningInstrumentData, SystemInstrumentConfigurationData } from '@socialapp/shared';
+import { APP_FEATURES, type AdminUserData, type AppFeatureKey, type AuditLogData, type ConfigurableRuleData, type DashboardData, type FeatureVisibilityData, type ManageableCatalogItem, type ManageableSportsCatalogs, type ReportPopulationData, type RoleCode, type ScreeningInstrumentData, type SystemInstrumentConfigurationData } from '@socialapp/shared';
 import * as argon2 from 'argon2';
 import { AuditService } from '../audit/audit.service';
 import { AthletesService } from '../athletes/athletes.service';
@@ -10,6 +10,26 @@ import { WorkService } from '../work/work.service';
 @Injectable()
 export class ManagementService {
   constructor(private readonly prisma: PrismaService, private readonly audit: AuditService, private readonly athletes: AthletesService, private readonly work: WorkService) {}
+
+  async featureVisibility(): Promise<FeatureVisibilityData[]> {
+    const rows = await this.prisma.featureVisibility.findMany();
+    const values = new Map(rows.map((item) => [item.key, item]));
+    return Object.values(APP_FEATURES).map((key) => {
+      const item = values.get(key);
+      return { key, enabledForSocialWorker: item?.enabledForSocialWorker ?? true, updatedAt: item?.updatedAt.toISOString() };
+    });
+  }
+
+  async updateFeatureVisibility(userId: string, key: string, enabledForSocialWorker: boolean): Promise<FeatureVisibilityData> {
+    if (!Object.values(APP_FEATURES).includes(key as AppFeatureKey)) throw new BadRequestException('La sección indicada no existe.');
+    const saved = await this.prisma.featureVisibility.upsert({
+      where: { key },
+      update: { enabledForSocialWorker, updatedBy: userId, version: { increment: 1 } },
+      create: { key, enabledForSocialWorker, createdBy: userId, updatedBy: userId },
+    });
+    await this.audit.record({ actorUserId: userId, action: 'feature-visibility.update', resourceType: 'FeatureVisibility', resourceId: key, metadata: { enabledForSocialWorker } });
+    return { key: key as AppFeatureKey, enabledForSocialWorker: saved.enabledForSocialWorker, updatedAt: saved.updatedAt.toISOString() };
+  }
 
   async dashboard(filters: Record<string, string> = {}): Promise<DashboardData> {
     const rows = await this.prisma.athlete.findMany({

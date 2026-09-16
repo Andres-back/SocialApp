@@ -1,29 +1,31 @@
 import { useEffect, useState } from 'react';
 import { AlertTriangle, ArrowRight, CalendarClock, CheckCircle2, ClipboardCheck, ClipboardPlus, Search, ShieldPlus, Sparkles, UserPlus, UsersRound } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { PERMISSIONS, type DashboardData, type PermissionCode } from '@socialapp/shared';
+import { APP_FEATURES, PERMISSIONS, type AppFeatureKey, type DashboardData, type PermissionCode } from '@socialapp/shared';
 import { useAuth } from '../features/auth/useAuth';
 import { loadAthletes } from '../features/athletes/athlete-repository';
 import { usePendingCount } from '../hooks/usePendingCount';
 import { api } from '../lib/api';
+import { useFeatureVisibility } from '../features/visibility/useFeatureVisibility';
 
 const actions = [
-  { label: 'Consultar deportistas', description: 'Busca y revisa expedientes', icon: Search, to: '/deportistas', permission: PERMISSIONS.ATHLETE_READ },
-  { label: 'Nuevo deportista', description: 'Registra una nueva vinculación', icon: UserPlus, to: '/deportistas/nuevo', permission: PERMISSIONS.ATHLETE_WRITE },
-  { label: 'Aplicar instrumento', description: 'Fichas, entrevistas y valoración', icon: ClipboardPlus, to: '/instrumentos', permission: PERMISSIONS.SOCIAL_RECORD_WRITE },
-  { label: 'Iniciar tamizaje', description: 'Selecciona instrumento y deportista', icon: ShieldPlus, to: '/instrumentos', permission: PERMISSIONS.SCREENING_WRITE },
-  { label: 'Registrar seguimiento', description: 'Aplica el instrumento de intervención', icon: CalendarClock, to: '/instrumentos', permission: PERMISSIONS.FOLLOW_UP_WRITE },
+  { label: 'Consultar deportistas', description: 'Busca y revisa expedientes', icon: Search, to: '/deportistas', permission: PERMISSIONS.ATHLETE_READ, feature: APP_FEATURES.ATHLETES },
+  { label: 'Nuevo deportista', description: 'Registra una nueva vinculación', icon: UserPlus, to: '/deportistas/nuevo', permission: PERMISSIONS.ATHLETE_WRITE, feature: APP_FEATURES.ATHLETES },
+  { label: 'Aplicar instrumento', description: 'Fichas, entrevistas y valoración', icon: ClipboardPlus, to: '/instrumentos', permission: PERMISSIONS.SOCIAL_RECORD_WRITE, feature: APP_FEATURES.INSTRUMENTS },
+  { label: 'Iniciar tamizaje', description: 'Selecciona instrumento y deportista', icon: ShieldPlus, to: '/instrumentos', permission: PERMISSIONS.SCREENING_WRITE, feature: APP_FEATURES.INSTRUMENTS },
+  { label: 'Registrar seguimiento', description: 'Aplica el instrumento de intervención', icon: CalendarClock, to: '/instrumentos', permission: PERMISSIONS.FOLLOW_UP_WRITE, feature: APP_FEATURES.INSTRUMENTS },
 ];
 
 export function DashboardPage() {
   const { user, can } = useAuth();
+  const { isVisible } = useFeatureVisibility();
   const { count } = usePendingCount();
   const [population, setPopulation] = useState({ total: 0, withRecord: 0 });
   const [dashboard, setDashboard] = useState<DashboardData>();
   const firstName = user?.displayName.split(' ')[0] ?? 'Profesional';
   const canViewSocialWork = can(PERMISSIONS.SOCIAL_RECORD_READ);
   const canViewDashboard = can(PERMISSIONS.DASHBOARD_AGGREGATE_READ);
-  const visibleActions = actions.filter((action) => can(action.permission as PermissionCode));
+  const visibleActions = actions.filter((action) => can(action.permission as PermissionCode) && isVisible(action.feature as AppFeatureKey));
   const today = new Intl.DateTimeFormat('es-CO', { weekday: 'long', day: 'numeric', month: 'long' }).format(new Date());
 
   useEffect(() => {
@@ -60,18 +62,18 @@ export function DashboardPage() {
             <h1 className="mt-5 font-display text-4xl leading-tight md:text-[3.25rem]">Hola, {firstName}.</h1>
             <p className="mt-3 max-w-2xl text-sm leading-6 text-pine-100 md:text-base">Tu espacio está listo para acompañar a cada deportista, organizar las fichas y continuar el trabajo incluso sin conexión.</p>
             <div className="mt-7 flex flex-wrap gap-3">
-              {can(PERMISSIONS.ATHLETE_WRITE) && <Link to="/deportistas/nuevo" className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-white px-4 py-2.5 text-sm font-bold text-pine-800 shadow-lg transition hover:-translate-y-0.5 hover:bg-sand-50"><UserPlus size={18} /> Registrar deportista</Link>}
-              {can(PERMISSIONS.SOCIAL_RECORD_WRITE) && <Link to="/instrumentos" className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-white/20 bg-white/10 px-4 py-2.5 text-sm font-semibold text-white backdrop-blur transition hover:bg-white/15"><ClipboardPlus size={18} /> Aplicar instrumento</Link>}
+              {can(PERMISSIONS.ATHLETE_WRITE) && isVisible(APP_FEATURES.ATHLETES) && <Link to="/deportistas/nuevo" className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-white px-4 py-2.5 text-sm font-bold text-pine-800 shadow-lg transition hover:-translate-y-0.5 hover:bg-sand-50"><UserPlus size={18} /> Registrar deportista</Link>}
+              {can(PERMISSIONS.SOCIAL_RECORD_WRITE) && isVisible(APP_FEATURES.INSTRUMENTS) && <Link to="/instrumentos" className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-white/20 bg-white/10 px-4 py-2.5 text-sm font-semibold text-white backdrop-blur transition hover:bg-white/15"><ClipboardPlus size={18} /> Aplicar instrumento</Link>}
             </div>
           </div>
-          <Link to="/sincronizacion" className="group flex min-w-[230px] items-center gap-4 rounded-2xl border border-white/15 bg-pine-950/20 p-4 backdrop-blur-md transition hover:bg-pine-950/30">
+          {isVisible(APP_FEATURES.SYNC) && <Link to="/sincronizacion" className="group flex min-w-[230px] items-center gap-4 rounded-2xl border border-white/15 bg-pine-950/20 p-4 backdrop-blur-md transition hover:bg-pine-950/30">
             <span className="grid h-12 w-12 place-items-center rounded-xl bg-emerald-400/15 text-emerald-200"><CheckCircle2 size={24} /></span>
             <span>
               <span className="block text-[10px] font-bold uppercase tracking-[.16em] text-pine-100/70">Sincronización</span>
               <span className="mt-1 block text-sm font-semibold">{count === 0 ? 'Todo está al día' : `${count} pendiente${count === 1 ? '' : 's'}`}</span>
             </span>
             <ArrowRight className="ml-auto text-pine-100/60 transition group-hover:translate-x-1" size={18} />
-          </Link>
+          </Link>}
         </div>
       </section>
 
@@ -119,10 +121,10 @@ export function DashboardPage() {
         )}
       </section>
 
-      <section className="card flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
+      {isVisible(APP_FEATURES.ATHLETES) && <section className="card flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-4"><div className="grid h-12 w-12 shrink-0 place-items-center rounded-xl bg-pine-50 text-pine-700"><Search size={21} /></div><div><p className="font-bold text-pine-900">Encuentra un deportista</p><p className="mt-0.5 text-sm text-slate-500">Busca por nombre, documento, código, programa o deporte.</p></div></div>
         <Link to="/deportistas" className="btn-secondary shrink-0">Ir al directorio <ArrowRight size={17} /></Link>
-      </section>
+      </section>}
     </div>
   );
 }

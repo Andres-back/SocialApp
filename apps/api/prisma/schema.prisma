@@ -630,8 +630,42 @@ model ScreeningCampaign {
   sport            Sport?                @relation(fields: [sportId], references: [id], onDelete: SetNull)
   instrument       ScreeningInstrument   @relation(fields: [instrumentId], references: [id], onDelete: Restrict)
   participants     CampaignParticipant[]
+  aiReports        CampaignAiReport[]
 
   @@index([date, status])
+}
+
+model CampaignAiReport {
+  id              String            @id @default(uuid()) @db.Uuid
+  campaignId      String            @db.Uuid
+  generalResults  String
+  observations    Json
+  recommendations Json
+  limitations     String
+  model           String            @db.VarChar(120)
+  promptVersion   Int               @default(1)
+  sourceHash      String            @db.VarChar(64)
+  generatedAt     DateTime          @default(now())
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  createdBy       String?           @db.Uuid
+  updatedBy       String?           @db.Uuid
+  deletedAt       DateTime?
+  version         Int               @default(1)
+  campaign        ScreeningCampaign @relation(fields: [campaignId], references: [id], onDelete: Restrict)
+
+  @@index([campaignId, generatedAt])
+  @@index([deletedAt])
+}
+
+model FeatureVisibility {
+  key                    String   @id @db.VarChar(80)
+  enabledForSocialWorker Boolean  @default(true)
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+  createdBy              String?  @db.Uuid
+  updatedBy              String?  @db.Uuid
+  version                Int      @default(1)
 }
 
 model CampaignParticipant {

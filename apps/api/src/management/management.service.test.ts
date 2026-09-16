@@ -2,6 +2,19 @@ import { describe, expect, it, vi } from 'vitest';
 import { ManagementService } from './management.service';
 
 describe('ManagementService instruments', () => {
+  it('updates and audits visibility for the social worker role', async () => {
+    const saved = { key: 'campaigns', enabledForSocialWorker: false, updatedAt: new Date('2026-09-15T12:00:00.000Z') };
+    const prisma = { featureVisibility: { upsert: vi.fn().mockResolvedValue(saved) } };
+    const audit = { record: vi.fn().mockResolvedValue(undefined) };
+    const service = new ManagementService(prisma as never, audit as never, {} as never, {} as never);
+
+    const result = await service.updateFeatureVisibility('22222222-2222-2222-2222-222222222222', 'campaigns', false);
+
+    expect(result).toEqual({ key: 'campaigns', enabledForSocialWorker: false, updatedAt: '2026-09-15T12:00:00.000Z' });
+    expect(prisma.featureVisibility.upsert).toHaveBeenCalledWith(expect.objectContaining({ where: { key: 'campaigns' }, update: expect.objectContaining({ enabledForSocialWorker: false }) }));
+    expect(audit.record).toHaveBeenCalledOnce();
+  });
+
   it('soft deletes every version of a questionnaire while preserving relational history', async () => {
     const instrument = { id: '11111111-1111-1111-1111-111111111111', name: 'Tamizaje familiar' };
     const prisma = {

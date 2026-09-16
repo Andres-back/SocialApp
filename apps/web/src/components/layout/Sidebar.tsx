@@ -1,17 +1,18 @@
 import { BookOpenCheck, ClipboardEdit, FileText, HeartHandshake, Home, ListPlus, LogOut, Settings, ShieldCheck, UsersRound, Wifi } from 'lucide-react';
 import { NavLink } from 'react-router-dom';
-import { PERMISSIONS } from '@socialapp/shared';
+import { APP_FEATURES, PERMISSIONS } from '@socialapp/shared';
 import { useAuth } from '../../features/auth/useAuth';
+import { useFeatureVisibility } from '../../features/visibility/useFeatureVisibility';
 
 const items = [
-  { to: '/', label: 'Inicio', icon: Home, permission: null },
-  { to: '/deportistas', label: 'Deportistas', icon: UsersRound, permission: PERMISSIONS.ATHLETE_READ },
-  { to: '/trabajo-social', label: 'Trabajo Social', icon: ClipboardEdit, permission: PERMISSIONS.SOCIAL_RECORD_READ },
-  { to: '/brigadas', label: 'Brigadas', icon: ShieldCheck, permission: PERMISSIONS.SCREENING_READ },
-  { to: '/instrumentos', label: 'Instrumentos', icon: BookOpenCheck, permission: PERMISSIONS.SCREENING_WRITE },
-  { to: '/reportes', label: 'Reportes', icon: FileText, permission: PERMISSIONS.DASHBOARD_AGGREGATE_READ },
-  { to: '/catalogos', label: 'Catálogos', icon: ListPlus, permission: PERMISSIONS.CATALOG_MANAGE },
-  { to: '/sincronizacion', label: 'Sincronización', icon: Wifi, permission: PERMISSIONS.SYNC_EXECUTE },
+  { to: '/', label: 'Inicio', icon: Home, permission: null, feature: null },
+  { to: '/deportistas', label: 'Deportistas', icon: UsersRound, permission: PERMISSIONS.ATHLETE_READ, feature: APP_FEATURES.ATHLETES },
+  { to: '/trabajo-social', label: 'Trabajo Social', icon: ClipboardEdit, permission: PERMISSIONS.SOCIAL_RECORD_READ, feature: APP_FEATURES.SOCIAL_WORK },
+  { to: '/brigadas', label: 'Brigadas', icon: ShieldCheck, permission: PERMISSIONS.SCREENING_READ, feature: APP_FEATURES.CAMPAIGNS },
+  { to: '/instrumentos', label: 'Instrumentos', icon: BookOpenCheck, permission: PERMISSIONS.SCREENING_WRITE, feature: APP_FEATURES.INSTRUMENTS },
+  { to: '/reportes', label: 'Reportes', icon: FileText, permission: PERMISSIONS.DASHBOARD_AGGREGATE_READ, feature: APP_FEATURES.REPORTS },
+  { to: '/catalogos', label: 'Catálogos', icon: ListPlus, permission: PERMISSIONS.CATALOG_MANAGE, feature: APP_FEATURES.CATALOGS },
+  { to: '/sincronizacion', label: 'Sincronización', icon: Wifi, permission: PERMISSIONS.SYNC_EXECUTE, feature: APP_FEATURES.SYNC },
 ];
 
 function getInitials(displayName = '') {
@@ -26,9 +27,10 @@ function getInitials(displayName = '') {
 
 export function Sidebar({ onNavigate }: { onNavigate: () => void }) {
   const { user, logout, can } = useAuth();
+  const { isVisible } = useFeatureVisibility();
   const visibleItems = [
-    ...items.filter((item) => !item.permission || can(item.permission)),
-    ...(can(PERMISSIONS.ADMIN_USERS) ? [{ to: '/administracion', label: 'Administración', icon: Settings, permission: PERMISSIONS.ADMIN_USERS }] : []),
+    ...items.filter((item) => (!item.permission || can(item.permission)) && (!item.feature || isVisible(item.feature))),
+    ...(can(PERMISSIONS.ADMIN_USERS) ? [{ to: '/administracion', label: 'Administración', icon: Settings, permission: PERMISSIONS.ADMIN_USERS, feature: null }] : []),
   ];
   const roleLabel = user?.roles.includes('ADMIN')
     ? 'Administración'

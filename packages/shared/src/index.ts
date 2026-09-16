@@ -7,6 +7,19 @@ export const ROLES = {
 
 export type RoleCode = (typeof ROLES)[keyof typeof ROLES];
 
+export const APP_FEATURES = {
+  ATHLETES: 'athletes',
+  SOCIAL_WORK: 'social-work',
+  CAMPAIGNS: 'campaigns',
+  INSTRUMENTS: 'instruments',
+  REPORTS: 'reports',
+  CATALOGS: 'catalogs',
+  SYNC: 'sync',
+} as const;
+
+export type AppFeatureKey = (typeof APP_FEATURES)[keyof typeof APP_FEATURES];
+export interface FeatureVisibilityData { key: AppFeatureKey; enabledForSocialWorker: boolean; updatedAt?: string; }
+
 export const PERMISSIONS = {
   ATHLETE_READ: 'athlete:read',
   ATHLETE_WRITE: 'athlete:write',
@@ -422,6 +435,18 @@ export interface ScreeningCampaignData extends ScreeningCampaignInput {
   createdAt: string;
   updatedAt: string;
   syncStatus?: SyncStatus;
+}
+
+export interface CampaignAiReportData {
+  id: string;
+  campaignId: string;
+  generalResults: string;
+  observations: string[];
+  recommendations: string[];
+  limitations: string;
+  model: string;
+  generatedAt: string;
+  version: number;
 }
 
 export interface TimelineEvent {

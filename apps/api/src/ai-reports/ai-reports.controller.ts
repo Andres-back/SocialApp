@@ -9,6 +9,16 @@ import { AiReportsService } from './ai-reports.service';
 export class AiReportsController {
   constructor(private readonly reports: AiReportsService) {}
 
+  @Get('campaigns/:campaignId/ai-reports')
+  @RequirePermissions(PERMISSIONS.SCREENING_READ)
+  listCampaignReports(@Param('campaignId') campaignId: string) { return this.reports.listCampaignReports(campaignId); }
+
+  @Post('campaigns/:campaignId/ai-reports')
+  @RequirePermissions(PERMISSIONS.SCREENING_WRITE)
+  generateCampaignReport(@Param('campaignId') campaignId: string, @Req() request: Request & { user: RequestUser }) {
+    return this.reports.generateCampaignReport(request.user.id, campaignId);
+  }
+
   @Get('athletes/:athleteId/ai-reports')
   @RequirePermissions(PERMISSIONS.SOCIAL_RECORD_READ)
   list(@Param('athleteId') athleteId: string) {

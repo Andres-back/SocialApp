@@ -1,7 +1,7 @@
 import { BadGatewayException, BadRequestException, Injectable, NotFoundException, ServiceUnavailableException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { createHash } from 'node:crypto';
-import type { AiRiskLevel, AiRiskReportData } from '@socialapp/shared';
+import type { AiRiskLevel, AiRiskReportData, CampaignAiReportData } from '@socialapp/shared';
 import { AuditService } from '../audit/audit.service';
 import { PrismaService } from '../prisma/prisma.service';
 
@@ -22,9 +22,99 @@ const reportSchema = {
   additionalProperties: false,
 } as const;
 
+const campaignReportSchema = {
+  type: 'object',
+  properties: {
+    generalResults: { type: 'string' },
+    observations: { type: 'array', items: { type: 'string' } },
+    recommendations: { type: 'array', items: { type: 'string' } },
+    limitations: { type: 'string' },
+  },
+  required: ['generalResults', 'observations', 'recommendations', 'limitations'],
+  additionalProperties: false,
+} as const;
+
+type GeneratedCampaignReport = Pick<CampaignAiReportData, 'generalResults' | 'observations' | 'recommendations' | 'limitations'>;
+
 @Injectable()
 export class AiReportsService {
   constructor(private readonly prisma: PrismaService, private readonly audit: AuditService) {}
+
+  async listCampaignReports(campaignId: string): Promise<CampaignAiReportData[]> {
+    const exists = await this.prisma.screeningCampaign.count({ where: { id: campaignId, deletedAt: null } });
+    if (!exists) throw new NotFoundException('No encontramos la brigada.');
+    const rows = await this.prisma.campaignAiReport.findMany({ where: { campaignId, deletedAt: null }, orderBy: { generatedAt: 'desc' } });
+    return rows.map((item) => this.serializeCampaignReport(item));
+  }
+
+  async generateCampaignReport(userId: string, campaignId: string): Promise<CampaignAiReportData> {
+    const apiKey = process.env.GROQ_API_KEY?.trim();
+    if (!apiKey) throw new ServiceUnavailableException('La generación asistida todavía no está configurada.');
+    const model = process.env.GROQ_MODEL?.trim() || 'openai/gpt-oss-20b';
+    const campaign = await this.prisma.screeningCampaign.findFirst({
+      where: { id: campaignId, deletedAt: null },
+      include: {
+        instrument: { include: { questions: { where: { deletedAt: null }, orderBy: { position: 'asc' } } } },
+        participants: { where: { deletedAt: null, status: 'COMPLETED' }, orderBy: { completedAt: 'asc' } },
+      },
+    });
+    if (!campaign) throw new NotFoundException('No encontramos la brigada.');
+    if (campaign.participants.length < 5) throw new BadRequestException('Se necesitan al menos cinco tamizajes completados para generar un informe agregado con IA sin exponer respuestas individuales.');
+    const totalAssigned = await this.prisma.campaignParticipant.count({ where: { campaignId, deletedAt: null } });
+    const questionSummaries = campaign.instrument.questions.map((question) => {
+      const values = campaign.participants.map((participant) => (participant.responses as Prisma.JsonObject)[question.id]).filter((value) => value !== undefined && value !== null && value !== '');
+      const base = { dimension: question.dimension, question: question.prompt, answered: values.length, omitted: campaign.participants.length - values.length };
+      if (question.type === 'TEXT' || question.type === 'NUMBER') return base;
+      const counts = new Map<string, number>();
+      for (const value of values) {
+        const selected = Array.isArray(value) ? value : [value];
+        for (const option of selected) counts.set(String(option), (counts.get(String(option)) ?? 0) + 1);
+      }
+      return { ...base, optionCounts: [...counts.entries()].map(([option, count]) => ({ option, count })) };
+    });
+    const source = {
+      campaignReference: campaign.id.slice(0, 8),
+      instrument: { name: campaign.instrument.name, version: campaign.instrument.version },
+      coverage: { assigned: totalAssigned, completed: campaign.participants.length },
+      aggregatedQuestionResults: questionSummaries,
+      privacyNote: 'No incluye nombres, identificadores, datos demográficos ni respuestas individuales. Los textos libres y valores numéricos no se transmiten.',
+    };
+    const sourceJson = JSON.stringify(source);
+    const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model,
+        temperature: 0.1,
+        messages: [
+          { role: 'system', content: [
+            'Eres un asistente de Trabajo Social que analiza resultados exclusivamente agregados de brigadas deportivas.',
+            'Responde en español profesional, claro y respetuoso. No diagnostiques ni inventes datos.',
+            'Describe patrones grupales y diferencia resultados, observaciones interpretativas y recomendaciones prácticas.',
+            'No hagas inferencias sobre personas concretas. Explica la cobertura parcial y cualquier limitación.',
+          ].join(' ') },
+          { role: 'user', content: 'Genera el borrador del informe agregado de esta brigada:\n' + sourceJson },
+        ],
+        response_format: { type: 'json_schema', json_schema: { name: 'campaign_social_work_report', strict: true, schema: campaignReportSchema } },
+      }),
+      signal: AbortSignal.timeout(45_000),
+    }).catch(() => { throw new BadGatewayException('No fue posible comunicarse con el servicio de generación asistida.'); });
+    if (!response.ok) throw new BadGatewayException('El servicio de generación asistida no pudo preparar el informe de la brigada.');
+    const envelope = await response.json() as { choices?: Array<{ message?: { content?: string } }> };
+    const content = envelope.choices?.[0]?.message?.content;
+    if (!content) throw new BadGatewayException('El servicio no devolvió un informe válido.');
+    let generated: GeneratedCampaignReport;
+    try { generated = JSON.parse(content) as GeneratedCampaignReport; }
+    catch { throw new BadGatewayException('El servicio devolvió un formato de informe no válido.'); }
+    if (!generated.generalResults || !Array.isArray(generated.observations) || !Array.isArray(generated.recommendations) || !generated.limitations) throw new BadGatewayException('El informe generado está incompleto.');
+    const saved = await this.prisma.campaignAiReport.create({ data: {
+      campaignId, generalResults: generated.generalResults, observations: generated.observations as Prisma.InputJsonValue,
+      recommendations: generated.recommendations as Prisma.InputJsonValue, limitations: generated.limitations, model,
+      sourceHash: createHash('sha256').update(sourceJson).digest('hex'), createdBy: userId, updatedBy: userId,
+    } });
+    await this.audit.record({ actorUserId: userId, action: 'campaign-ai-report.generate', resourceType: 'CampaignAiReport', resourceId: saved.id, metadata: { campaignId, model, completedParticipants: campaign.participants.length, source: 'aggregate-only' } });
+    return this.serializeCampaignReport(saved);
+  }
 
   async list(athleteId: string): Promise<AiRiskReportData[]> {
     const exists = await this.prisma.athlete.count({ where: { id: athleteId, deletedAt: null } });
@@ -259,5 +349,9 @@ export class AiReportsService {
       reviewedAt: item.reviewedAt?.toISOString() ?? null,
       version: item.version,
     };
+  }
+
+  private serializeCampaignReport(item: any): CampaignAiReportData {
+    return { id: item.id, campaignId: item.campaignId, generalResults: item.generalResults, observations: item.observations as string[], recommendations: item.recommendations as string[], limitations: item.limitations, model: item.model, generatedAt: item.generatedAt.toISOString(), version: item.version };
   }
 }

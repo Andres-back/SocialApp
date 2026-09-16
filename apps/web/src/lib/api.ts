@@ -1,4 +1,4 @@
-import type { AiRiskReportData, AlertData, AthleteInput, AthleteRecord, AthleteWorkspace, AuthSession, DashboardData, FollowUpCaseData, FollowUpCaseInput, FollowUpEntryData, FollowUpEntryInput, ManageableSportsCatalogs, NetworkDiagramData, ProfessionalObservationData, ReportPopulationData, ScreeningCampaignData, ScreeningCampaignInput, ScreeningInstrumentData, ScreeningInstrumentInput, SocialRecordData, SocialRecordInput, SocioeconomicAssessmentData, SocioeconomicAssessmentInput, SportsCatalogs, SyncMutation, SyncPushResponse, SystemInstrumentConfigurationData, SystemInstrumentQuestionData } from '@socialapp/shared';
+import type { AiRiskReportData, AlertData, AppFeatureKey, AthleteInput, AthleteRecord, AthleteWorkspace, AuthSession, CampaignAiReportData, DashboardData, FeatureVisibilityData, FollowUpCaseData, FollowUpCaseInput, FollowUpEntryData, FollowUpEntryInput, ManageableSportsCatalogs, NetworkDiagramData, ProfessionalObservationData, ReportPopulationData, ScreeningCampaignData, ScreeningCampaignInput, ScreeningInstrumentData, ScreeningInstrumentInput, SocialRecordData, SocialRecordInput, SocioeconomicAssessmentData, SocioeconomicAssessmentInput, SportsCatalogs, SyncMutation, SyncPushResponse, SystemInstrumentConfigurationData, SystemInstrumentQuestionData } from '@socialapp/shared';
 
 const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:3000/api/v1';
 let accessToken: string | null = sessionStorage.getItem('socialapp.accessToken');
@@ -157,9 +157,13 @@ export const api = {
   generateAiRiskReport(athleteId: string, participantId?: string) {
     return request<AiRiskReportData>(`/athletes/${athleteId}/ai-reports`, { method: 'POST', body: JSON.stringify({ participantId }) });
   },
+  listCampaignAiReports(campaignId: string) { return request<CampaignAiReportData[]>(`/campaigns/${campaignId}/ai-reports`); },
+  generateCampaignAiReport(campaignId: string) { return request<CampaignAiReportData>(`/campaigns/${campaignId}/ai-reports`, { method: 'POST' }); },
   reviewAiRiskReport(id: string) { return request<AiRiskReportData>(`/ai-reports/${id}/review`, { method: 'PATCH' }); },
   auditExport(type: string, athleteId?: string) { return request<{ success: boolean }>('/reports/export-audit', { method: 'POST', body: JSON.stringify({ type, athleteId }) }); },
   adminOverview() { return request<Record<string, unknown>>('/admin/overview'); },
+  featureVisibility() { return request<FeatureVisibilityData[]>('/features'); },
+  updateFeatureVisibility(key: AppFeatureKey, enabledForSocialWorker: boolean) { return request<FeatureVisibilityData>('/admin/features/' + key, { method: 'PUT', body: JSON.stringify({ enabledForSocialWorker }) }); },
   createCatalog(kind: string, name: string) { return request(`/admin/catalogs/${kind}`, { method: 'POST', body: JSON.stringify({ name }) }); },
   manageableCatalogs() { return request<ManageableSportsCatalogs>('/catalogs/manage'); },
   createOperationalCatalog(kind: string, name: string) { return request(`/catalogs/${kind}`, { method: 'POST', body: JSON.stringify({ name }) }); },

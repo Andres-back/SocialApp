@@ -41,6 +41,15 @@ export class ManagementController {
   @RequirePermissions(PERMISSIONS.ADMIN_USERS, PERMISSIONS.ADMIN_CATALOGS)
   adminOverview() { return this.management.adminOverview(); }
 
+  @Get('features')
+  featureVisibility() { return this.management.featureVisibility(); }
+
+  @Put('admin/features/:key')
+  @RequirePermissions(PERMISSIONS.ADMIN_USERS)
+  updateFeatureVisibility(@Param('key') key: string, @Body() body: { enabledForSocialWorker: boolean }, @Req() request: Request & { user: RequestUser }) {
+    return this.management.updateFeatureVisibility(request.user.id, key, body.enabledForSocialWorker === true);
+  }
+
   @Post('admin/catalogs/:kind')
   @RequirePermissions(PERMISSIONS.ADMIN_CATALOGS)
   catalog(@Param('kind') kind: string, @Body() body: { name: string }, @Req() request: Request & { user: RequestUser }) {
